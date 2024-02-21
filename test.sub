@@ -1,0 +1,16 @@
+universe = vanilla
+notification = Never
+request_cpus = 1
+request_memory = 5000 MB
+request_disk = 4000 MB
+getenv = True
+accounting_group = ligo.sim.o3.cbc.bayesianpopulations.parametric
+accounting_group_user = manchun.yeung
+
+
+executable = /home/manchun.yeung/population/simon/popnflow/pop_param.py
+output = /home/manchun.yeung/population/simon/popnflow/OUT/t.out
+error = /home/manchun.yeung/population/simon/popnflow/ERR/t.err
+log = /home/manchun.yeung/population/simon/popnflow/LOG/t.log
+
+queue

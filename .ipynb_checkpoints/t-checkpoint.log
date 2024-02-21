@@ -1,0 +1,24 @@
+000 (138017777.000.000) 2024-02-19 19:56:10 Job submitted from host: <10.14.0.51:9618?addrs=10.14.0.51-9618&alias=ldas-pcdev5.ligo.caltech.edu&noUDP&sock=schedd_4696_a4d5>
+...
+001 (138017777.000.000) 2024-02-19 19:56:50 Job executing on host: <10.14.10.129:9618?addrs=10.14.10.129-9618&alias=node2379.cluster.ldas.cit&noUDP&sock=startd_2948_a949>
+	SlotName: slot1_11@node2379.cluster.ldas.cit
+	CondorScratchDir = "/local/condor/execute/dir_3599223"
+	Cpus = 1
+	Disk = 4161704
+	GPUs = 0
+	Memory = 5120
+...
+007 (138017777.000.000) 2024-02-19 19:56:50 Shadow exception!
+	Error from slot1_11@node2379.cluster.ldas.cit: Failed to execute '/home/manchun.yeung/population/simon/popnflow/pop_param.py': (errno=13: 'Permission denied')
+	0  -  Run Bytes Sent By Job
+	0  -  Run Bytes Received By Job
+...
+012 (138017777.000.000) 2024-02-19 19:56:50 Job was held.
+	Error from slot1_11@node2379.cluster.ldas.cit: Failed to execute '/home/manchun.yeung/population/simon/popnflow/pop_param.py': (errno=13: 'Permission denied')
+	Code 6 Subcode 13
+...
+009 (138017777.000.000) 2024-02-19 19:58:21 Job was aborted.
+	via condor_rm (by user manchun.yeung)
+...
+000 (138018050.000.000) 2024-02-19 20:00:08 Job submitted from host: <10.14.0.51:9618?addrs=10.14.0.51-9618&alias=ldas-pcdev5.ligo.caltech.edu&noUDP&sock=schedd_4696_a4d5>
+...

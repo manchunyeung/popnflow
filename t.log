@@ -1,0 +1,223 @@
+000 (138017777.000.000) 2024-02-19 19:56:10 Job submitted from host: <10.14.0.51:9618?addrs=10.14.0.51-9618&alias=ldas-pcdev5.ligo.caltech.edu&noUDP&sock=schedd_4696_a4d5>
+...
+001 (138017777.000.000) 2024-02-19 19:56:50 Job executing on host: <10.14.10.129:9618?addrs=10.14.10.129-9618&alias=node2379.cluster.ldas.cit&noUDP&sock=startd_2948_a949>
+	SlotName: slot1_11@node2379.cluster.ldas.cit
+	CondorScratchDir = "/local/condor/execute/dir_3599223"
+	Cpus = 1
+	Disk = 4161704
+	GPUs = 0
+	Memory = 5120
+...
+007 (138017777.000.000) 2024-02-19 19:56:50 Shadow exception!
+	Error from slot1_11@node2379.cluster.ldas.cit: Failed to execute '/home/manchun.yeung/population/simon/popnflow/pop_param.py': (errno=13: 'Permission denied')
+	0  -  Run Bytes Sent By Job
+	0  -  Run Bytes Received By Job
+...
+012 (138017777.000.000) 2024-02-19 19:56:50 Job was held.
+	Error from slot1_11@node2379.cluster.ldas.cit: Failed to execute '/home/manchun.yeung/population/simon/popnflow/pop_param.py': (errno=13: 'Permission denied')
+	Code 6 Subcode 13
+...
+009 (138017777.000.000) 2024-02-19 19:58:21 Job was aborted.
+	via condor_rm (by user manchun.yeung)
+...
+000 (138018050.000.000) 2024-02-19 20:00:08 Job submitted from host: <10.14.0.51:9618?addrs=10.14.0.51-9618&alias=ldas-pcdev5.ligo.caltech.edu&noUDP&sock=schedd_4696_a4d5>
+...
+001 (138018050.000.000) 2024-02-19 20:00:55 Job executing on host: <10.14.10.13:9618?addrs=10.14.10.13-9618&alias=node2263.cluster.ldas.cit&noUDP&sock=startd_7660_b38b>
+	SlotName: slot1_3@node2263.cluster.ldas.cit
+	CondorScratchDir = "/local/condor/execute/dir_2754019"
+	Cpus = 1
+	Disk = 4161666
+	GPUs = 0
+	Memory = 5120
+...
+007 (138018050.000.000) 2024-02-19 20:00:55 Shadow exception!
+	Error from slot1_3@node2263.cluster.ldas.cit: Failed to execute '/home/manchun.yeung/population/simon/popnflow/pop_param.py': (errno=13: 'Permission denied')
+	0  -  Run Bytes Sent By Job
+	0  -  Run Bytes Received By Job
+...
+012 (138018050.000.000) 2024-02-19 20:00:55 Job was held.
+	Error from slot1_3@node2263.cluster.ldas.cit: Failed to execute '/home/manchun.yeung/population/simon/popnflow/pop_param.py': (errno=13: 'Permission denied')
+	Code 6 Subcode 13
+...
+009 (138018050.000.000) 2024-02-19 20:04:41 Job was aborted.
+	via condor_rm (by user manchun.yeung)
+...
+000 (138018339.000.000) 2024-02-19 20:04:48 Job submitted from host: <10.14.0.51:9618?addrs=10.14.0.51-9618&alias=ldas-pcdev5.ligo.caltech.edu&noUDP&sock=schedd_4696_a4d5>
+...
+001 (138018339.000.000) 2024-02-19 20:05:54 Job executing on host: <10.14.4.18:9618?addrs=10.14.4.18-9618&alias=node768.cluster.ldas.cit&noUDP&sock=startd_2773_a036>
+	SlotName: slot1_4@node768.cluster.ldas.cit
+	CondorScratchDir = "/local/condor/execute/dir_3971372"
+	Cpus = 1
+	Disk = 4165733
+	GPUs = 0
+	Memory = 5120
+...
+007 (138018339.000.000) 2024-02-19 20:05:54 Shadow exception!
+	Error from slot1_4@node768.cluster.ldas.cit: Failed to execute '/home/manchun.yeung/population/simon/popnflow/pop_param.py': (errno=13: 'Permission denied')
+	0  -  Run Bytes Sent By Job
+	0  -  Run Bytes Received By Job
+...
+012 (138018339.000.000) 2024-02-19 20:05:54 Job was held.
+	Error from slot1_4@node768.cluster.ldas.cit: Failed to execute '/home/manchun.yeung/population/simon/popnflow/pop_param.py': (errno=13: 'Permission denied')
+	Code 6 Subcode 13
+...
+000 (138018815.000.000) 2024-02-19 20:13:19 Job submitted from host: <10.14.0.51:9618?addrs=10.14.0.51-9618&alias=ldas-pcdev5.ligo.caltech.edu&noUDP&sock=schedd_4696_a4d5>
+...
+001 (138018815.000.000) 2024-02-19 20:14:00 Job executing on host: <10.14.3.1:9618?addrs=10.14.3.1-9618&alias=node501.cluster.ldas.cit&noUDP&sock=startd_8554_e936>
+	SlotName: slot1_8@node501.cluster.ldas.cit
+	AvailableGPUs = {  }
+	CondorScratchDir = "/local/condor/execute/dir_58826"
+	Cpus = 1
+	Disk = 4165735
+	GPUs = 0
+	Memory = 5120
+...
+006 (138018815.000.000) 2024-02-19 20:14:09 Image size of job updated: 118000
+	116  -  MemoryUsage of job (MB)
+	117788  -  ResidentSetSize of job (KB)
+...
+009 (138018339.000.000) 2024-02-19 20:14:17 Job was aborted.
+	via condor_rm (by user manchun.yeung)
+...
+006 (138018815.000.000) 2024-02-19 20:14:47 Image size of job updated: 381108
+	193  -  MemoryUsage of job (MB)
+	196652  -  ResidentSetSize of job (KB)
+...
+005 (138018815.000.000) 2024-02-19 20:14:47 Job terminated.
+	(1) Normal termination (return value 1)
+		Usr 0 00:00:11, Sys 0 00:00:00  -  Run Remote Usage
+		Usr 0 00:00:00, Sys 0 00:00:00  -  Run Local Usage
+		Usr 0 00:00:11, Sys 0 00:00:00  -  Total Remote Usage
+		Usr 0 00:00:00, Sys 0 00:00:00  -  Total Local Usage
+	0  -  Run Bytes Sent By Job
+	0  -  Run Bytes Received By Job
+	0  -  Total Bytes Sent By Job
+	0  -  Total Bytes Received By Job
+	Partitionable Resources :    Usage  Request Allocated 
+	   Cpus                 :        0        1         1 
+	   Disk (KB)            :        7  4096000   4165735 
+	   GPUs                 :                           0 
+	   Memory (MB)          :      193     5000      5120 
+	   TimeExecute (s)      :       47                    
+	   TimeSlotBusy (s)     :       48                    
+
+	Job terminated of its own accord at 2024-02-20T04:14:47Z with exit-code 1.
+...
+000 (138018927.000.000) 2024-02-19 20:15:28 Job submitted from host: <10.14.0.51:9618?addrs=10.14.0.51-9618&alias=ldas-pcdev5.ligo.caltech.edu&noUDP&sock=schedd_4696_a4d5>
+...
+001 (138018927.000.000) 2024-02-19 20:15:44 Job executing on host: <10.14.9.143:9618?addrs=10.14.9.143-9618&alias=node2143.cluster.ldas.cit&noUDP&sock=startd_9824_067d>
+	SlotName: slot1_6@node2143.cluster.ldas.cit
+	CondorScratchDir = "/local/condor/execute/dir_3387014"
+	Cpus = 1
+	Disk = 4165733
+	GPUs = 0
+	Memory = 5120
+...
+006 (138018927.000.000) 2024-02-19 20:15:52 Image size of job updated: 379580
+	334  -  MemoryUsage of job (MB)
+	341184  -  ResidentSetSize of job (KB)
+...
+005 (138018927.000.000) 2024-02-19 20:15:52 Job terminated.
+	(1) Normal termination (return value 1)
+		Usr 0 00:00:05, Sys 0 00:00:00  -  Run Remote Usage
+		Usr 0 00:00:00, Sys 0 00:00:00  -  Run Local Usage
+		Usr 0 00:00:05, Sys 0 00:00:00  -  Total Remote Usage
+		Usr 0 00:00:00, Sys 0 00:00:00  -  Total Local Usage
+	0  -  Run Bytes Sent By Job
+	0  -  Run Bytes Received By Job
+	0  -  Total Bytes Sent By Job
+	0  -  Total Bytes Received By Job
+	Partitionable Resources :    Usage  Request Allocated 
+	   Cpus                 :        0        1         1 
+	   Disk (KB)            :        7  4096000   4165733 
+	   GPUs                 :                           0 
+	   Memory (MB)          :      334     5000      5120 
+	   TimeExecute (s)      :        8                    
+	   TimeSlotBusy (s)     :        8                    
+
+	Job terminated of its own accord at 2024-02-20T04:15:52Z with exit-code 1.
+...
+000 (138019240.000.000) 2024-02-19 20:22:44 Job submitted from host: <10.14.0.51:9618?addrs=10.14.0.51-9618&alias=ldas-pcdev5.ligo.caltech.edu&noUDP&sock=schedd_4696_a4d5>
+...
+001 (138019240.000.000) 2024-02-19 20:23:27 Job executing on host: <10.14.10.141:9618?addrs=10.14.10.141-9618&alias=node2391.cluster.ldas.cit&noUDP&sock=startd_192778_407b>
+	SlotName: slot1_9@node2391.cluster.ldas.cit
+	CondorScratchDir = "/local/condor/execute/dir_1881731"
+	Cpus = 1
+	Disk = 4161705
+	GPUs = 0
+	Memory = 5000
+...
+006 (138019240.000.000) 2024-02-19 20:23:37 Image size of job updated: 126460
+	124  -  MemoryUsage of job (MB)
+	126308  -  ResidentSetSize of job (KB)
+...
+006 (138019240.000.000) 2024-02-19 20:28:37 Image size of job updated: 386820
+	375  -  MemoryUsage of job (MB)
+	383952  -  ResidentSetSize of job (KB)
+...
+006 (138019240.000.000) 2024-02-19 20:33:37 Image size of job updated: 388952
+	377  -  MemoryUsage of job (MB)
+	385124  -  ResidentSetSize of job (KB)
+...
+006 (138019240.000.000) 2024-02-19 20:43:39 Image size of job updated: 388952
+	377  -  MemoryUsage of job (MB)
+	385412  -  ResidentSetSize of job (KB)
+...
+006 (138019240.000.000) 2024-02-19 20:48:39 Image size of job updated: 389132
+	377  -  MemoryUsage of job (MB)
+	385412  -  ResidentSetSize of job (KB)
+...
+006 (138019240.000.000) 2024-02-19 20:53:39 Image size of job updated: 389132
+	377  -  MemoryUsage of job (MB)
+	385460  -  ResidentSetSize of job (KB)
+...
+006 (138019240.000.000) 2024-02-19 21:03:40 Image size of job updated: 389132
+	378  -  MemoryUsage of job (MB)
+	386468  -  ResidentSetSize of job (KB)
+...
+004 (138019240.000.000) 2024-02-20 11:02:15 Job was evicted.
+	(0) CPU times
+		Usr 0 14:20:26, Sys 0 00:04:24  -  Run Remote Usage
+		Usr 0 00:00:00, Sys 0 00:00:00  -  Run Local Usage
+	0  -  Run Bytes Sent By Job
+	0  -  Run Bytes Received By Job
+	Partitionable Resources :    Usage  Request Allocated 
+	   Cpus                 :     0.99        1         1 
+	   Disk (KB)            :    10     4096000   4161705 
+	   GPUs                 :                           0 
+	   Memory (MB)          :   378        5000      5000 
+	   TimeExecute (s)      : 52728                       
+	   TimeSlotBusy (s)     : 52728                       
+...
+001 (138019240.000.000) 2024-02-20 11:37:08 Job executing on host: <10.14.10.67:9618?addrs=10.14.10.67-9618&alias=node2317.cluster.ldas.cit&noUDP&sock=startd_3122_02c3>
+	SlotName: slot1_8@node2317.cluster.ldas.cit
+	CondorScratchDir = "/local/condor/execute/dir_1455782"
+	Cpus = 1
+	Disk = 4161704
+	GPUs = 0
+	Memory = 5120
+...
+006 (138019240.000.000) 2024-02-20 16:46:40 Image size of job updated: 419192
+	391  -  MemoryUsage of job (MB)
+	400000  -  ResidentSetSize of job (KB)
+...
+005 (138019240.000.000) 2024-02-20 16:46:41 Job terminated.
+	(1) Normal termination (return value 0)
+		Usr 0 05:05:36, Sys 0 00:01:41  -  Run Remote Usage
+		Usr 0 00:00:00, Sys 0 00:00:00  -  Run Local Usage
+		Usr 0 19:26:02, Sys 0 00:06:05  -  Total Remote Usage
+		Usr 0 00:00:00, Sys 0 00:00:00  -  Total Local Usage
+	0  -  Run Bytes Sent By Job
+	0  -  Run Bytes Received By Job
+	0  -  Total Bytes Sent By Job
+	0  -  Total Bytes Received By Job
+	Partitionable Resources :    Usage  Request Allocated 
+	   Cpus                 :     0.99        1         1 
+	   Disk (KB)            :    10     4096000   4161704 
+	   GPUs                 :                           0 
+	   Memory (MB)          :   391        5000      5120 
+	   TimeExecute (s)      : 18572                       
+	   TimeSlotBusy (s)     : 18573                       
+
+	Job terminated of its own accord at 2024-02-21T00:46:40Z with exit-code 0.
+...
