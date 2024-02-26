@@ -67,17 +67,11 @@ def p_m1(data, alpha, m_max):
 def p_q(data, beta, m_min):
     mass1 = data['mass_1'].values
     mass_ratios = data['mass_ratio'].values
-    mask = mass_ratios>(m_min/mass1)
     
+    mask = mass_ratios>(m_min/mass1)
     mask2 = mass_ratios<1
     
-    res = np.zeros(len(mass_ratios))
-    
-    for i in range(len(res)):
-        if mask[i]==True and mask2[i]==True:
-            res[i] = mass_ratios[i]**(beta)
-        else:
-            res[i] = 0      
+    res = np.where(mask & mask2, mass_ratios**(beta), 0)
     return res
 
 def p_z(data, kappa): 
@@ -194,11 +188,11 @@ from bilby.hyper.model import Model
 fast_priors = PriorDict()
 
 # mass
-fast_priors["alpha"] = Uniform(minimum=-2, maximum=4, latex_label="$\\alpha$")
+fast_priors["alpha"] = Uniform(minimum=-3, maximum=4, latex_label="$\\alpha$")
 fast_priors["beta"] = Uniform(minimum=-4, maximum=12, latex_label="$\\beta$")
-fast_priors["kappa"] = Uniform(minimum=0, maximum=10, latex_label="$\\kappa$")
+fast_priors["kappa"] = Uniform(minimum=9, maximum=17, latex_label="$\\kappa$")
 fast_priors["mmin"] = Uniform(minimum=5, maximum=10, latex_label="$m_{\\min}$")
-fast_priors["mmax"] = Uniform(minimum=20, maximum=60, latex_label="$m_{\\max}$")
+fast_priors["mmax"] = Uniform(minimum=30, maximum=70, latex_label="$m_{\\max}$")
 # fast_priors["lam"] = Uniform(minimum=0, maximum=1, latex_label="$\\lambda_{m}$")
 # fast_priors["mpp"] = Uniform(minimum=10, maximum=50, latex_label="$\\mu_{m}$")
 # fast_priors["sigpp"] = Uniform(minimum=0, maximum=10, latex_label="$\\sigma_{m}$")
@@ -215,7 +209,7 @@ fast_priors["mmax"] = Uniform(minimum=20, maximum=60, latex_label="$m_{\\max}$")
 
 def log_prior(Lambda):
     alpha, beta, kappa, m_min, m_max = Lambda
-    if (alpha>-2) and (alpha<4) and (beta>-4) and (beta<12) and (kappa>0) and (kappa<10) and (m_max<60) and (m_min>5) and (m_max>20) and (m_min<10):
+    if (alpha>-3) and (alpha<4) and (beta>-4) and (beta<12) and (kappa>9) and (kappa<17) and (m_max<70) and (m_max>30) and (m_min>5) and (m_min<10):
         return 0.
     return -np.inf
 
@@ -231,18 +225,11 @@ def log_probability(Lambda, *posteriors):
 
 pos = list()
 for param in list(fast_priors.keys()):
-    pos.append(np.random.uniform(fast_priors[param].minimum<0, high=fast_priors[param].maximum, size=30))
+    pos.append(np.random.uniform(fast_priors[param].minimum, high=fast_priors[param].maximum, size=30))
 pos = np.array(pos).transpose()
 nwalkers, ndim = pos.shape
 
-
-# In[15]:
-
-
-pos.shape
-
-
-# In[ ]:
+# In[16]:
 
 
 import emcee
@@ -270,33 +257,37 @@ sampler.run_mcmc(p0, N_samples, progress=True)
 # In[ ]:
 
 
-import emcee
+# import emcee
 
-# pos = np.random.randint(0, high=50, size=(30, 5))
+# # pos = np.random.randint(0, high=50, size=(30, 5))
 
-sampler = emcee.EnsembleSampler(
-    nwalkers, ndim, log_probability, args=(posteriors)
-)
-sampler.run_mcmc(pos, 1000, progress=True);
-
-
-# In[ ]:
+# sampler = emcee.EnsembleSampler(
+#     nwalkers, ndim, log_probability, args=(posteriors)
+# )
+# sampler.run_mcmc(pos, 1000, progress=True);
 
 
-flat_samples = sampler.get_chain(discard=100, thin=100, flat=True)
+# In[6]:
 
 
-# In[ ]:
+# import emcee
+# filename = "stored_walkers.txt"
+# backend = emcee.backends.HDFBackend(filename) 
+# flat_samples = backend.get_chain(discard=100, thin=100, flat=True)
+# flat_samples = sampler.get_chain(discard=100, thin=100, flat=True)
 
 
-import corner
+# In[8]:
 
-# labels = ['alpha', 'beta', 'mmin', 'mmax', 'lam', 'mpp', 'sigpp']
-labels = ['alpha', 'beta', 'kappa', 'mmin', 'mmax']
 
-fig = corner.corner(
-    flat_samples, labels=labels, smooth=1.2
-);
+# import corner
+
+# # labels = ['alpha', 'beta', 'mmin', 'mmax', 'lam', 'mpp', 'sigpp']
+# labels = ['alpha', 'beta', 'kappa', 'mmin', 'mmax']
+
+# fig = corner.corner(
+#     flat_samples, labels=labels, smooth=1.2
+# );
 
 
 # In[ ]:

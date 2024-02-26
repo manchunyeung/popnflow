@@ -89,13 +89,6 @@ for event in events:
     posteriors.append(_posterior)
     priors.append(_prior)
 
-
-# In[10]:
-
-
-posteriors[0]
-
-
 # In[11]:
 
 
@@ -118,50 +111,42 @@ upper_bounds = np.full(np.asarray(parameters).shape, [60,60,700])
 
 # In[13]:
 
+blocks = [128]
+hiddens = [10]
+epochs = [300]
 
-# Denmarf density estimation
-de = DensityEstimate(device="cuda", use_cuda=True).fit(
-    parameters,
-    num_blocks=128,
-    num_hidden=5,
-    num_epochs=100,
-    bounded=True,
-    lower_bounds=lower_bounds,
-    upper_bounds=upper_bounds
+# True data for evaluation, using the remaining 30% of data
+parameters_eval = list()
 
-)
+for i in range(training_index, len(first_event['mass_1_det'])):
+    parameters_eval.append([first_event['mass_1_det'][i], first_event['mass_2_det'][i], first_event['luminosity_distance'][i]])
 
+parameters_eval = np.array(parameters_eval)
 
-# In[ ]:
+samples_exact = MCSamples(samples=parameters_eval, label="from samples")
 
 
-de.save("denmarf_bounded256.pkl")
+for num_blocks in blocks:
+    for num_hidden in hiddens:
+        for num_epochs in epochs:
+            
+            # Denmarf density estimation
+            de = DensityEstimate(device="cuda", use_cuda=True).fit(
+                parameters,
+                num_blocks=num_blocks,
+                num_hidden=num_hidden,
+                num_epochs=num_epochs
+            )
+            de.save("denmarf_{}_{}_{}.pkl".format(num_blocks, num_hidden, num_epochs))
+
+            xgen_maf = de.sample(12000)
+            samples_maf = MCSamples(samples=xgen_maf, label="from denmarf")
+            g1 = plots.get_subplot_plotter()
+            g1.triangle_plot([samples_exact, samples_maf], filled=False)
+            g1.export("plots/maf_{}_{}_{}.pdf".format(num_blocks, num_hidden, num_epochs))
 
 
-# In[9]:
-
-
-# # True data for evaluation, using the remaining 30% of data
-# parameters_eval = list()
-
-# for i in range(training_index, len(first_event['mass_1_det'])):
-#     parameters_eval.append([first_event['mass_1_det'][i], first_event['mass_2_det'][i], first_event['luminosity_distance'][i]])
-    
-# parameters_eval = np.array(parameters_eval)
-
-
-# In[10]:
-
-
-# samples_exact = MCSamples(samples=parameters_eval, label="from samples")
-
-# xgen_maf = de.sample(12000)
-# samples_maf = MCSamples(samples=xgen_maf, label="from denmarf")
-# g1 = plots.get_subplot_plotter()
-# g1.triangle_plot([samples_exact, samples_maf], filled=False)
-
-
-# In[ ]:
+            # In[ ]:
 
 
 
