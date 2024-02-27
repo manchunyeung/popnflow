@@ -1,0 +1,25 @@
+
+ 32_5_100best average log likelihood: -10.209
+ 32_5_200best average log likelihood: -10.257
+ 32_10_100best average log likelihood: -10.202
+ 32_10_200best average log likelihood: -10.231
+ 32_15_100best average log likelihood: -10.196
+ 32_15_200best average log likelihood: -10.221
+ 64_5_100best average log likelihood: -10.291
+ 64_5_200best average log likelihood: -10.280
+ 64_10_100best average log likelihood: -10.233
+ 64_10_200best average log likelihood: -10.242
+ 64_15_100best average log likelihood: -10.227
+ 64_15_200best average log likelihood: -10.221
+ 128_5_100best average log likelihood: -10.336
+ 128_5_200best average log likelihood: -10.314
+ 128_10_100best average log likelihood: -10.289
+ 128_10_200best average log likelihood: -10.288
+ 128_15_100best average log likelihood: -10.320
+ 128_15_200best average log likelihood: -10.343
+ 256_5_100best average log likelihood: -11.571
+ 256_5_200best average log likelihood: -11.863
+ 256_10_100best average log likelihood: -11.161
+ 256_10_200best average log likelihood: -10.567
+ 256_15_100best average log likelihood: -10.426
+ 256_15_200best average log likelihood: -10.547
