@@ -20,7 +20,8 @@ from astropy.cosmology import Planck15, FlatLambdaCDM
 from tqdm import tqdm
 import astropy.units as u
 import scipy
-
+from scipy.special import logsumexp
+import matplotlib.pyplot as plt
 
 # In[3]:
 
@@ -84,9 +85,9 @@ def total_p(mass1, mass_ratio, alpha, beta, m_min, m_max):
 # In[8]:
 
 
-def log_beta(m1sels, qsels, p_draw, Lambda):
+def log_beta(m1sels, qsels, p_draw, Nsamples, Lambda):
     ratio = np.divide(total_p(m1sels, qsels, *Lambda), p_draw, out=np.zeros_like(p_draw), where=p_draw!=0)
-    return np.log(np.mean(ratio))
+    return np.log(logsumexp(np.log(ratio)) - np.log(Nsamples))
 
 def compute_log_likelihood_per_event(data, Lambda, prior):
     m1 = data['mass_1']
@@ -101,7 +102,8 @@ def log_likelihood(Lambda, posteriors, m1sels, qsels, p_draw):
             prior = posterior["prior"]
         else:
             prior = 1.
-        log_likelihood += compute_log_likelihood_per_event(posterior, Lambda, prior)-10*log_beta(m1sels, qsels, p_draw, Lambda)
+        Nsamples = len(posterior['mass_1'])
+        log_likelihood += compute_log_likelihood_per_event(posterior, Lambda, prior)-10*log_beta(m1sels, qsels, p_draw, Nsamples, Lambda)
     return log_likelihood
 
 
@@ -145,7 +147,9 @@ for event in events:
     posteriors.append(_posterior)
     priors.append(_prior)
 
+
 draw_file = "o1+o2+o3_bbhpop_real+semianalytic-LIGO-T2100377-v2.hdf5"
+
 with h5py.File(draw_file, 'r') as ff:
     name_df = pd.DataFrame(ff['injections']['name'])
     snr_df = pd.DataFrame(ff['injections']['optimal_snr_net'])
@@ -154,6 +158,10 @@ with h5py.File(draw_file, 'r') as ff:
     m1sels = pd.DataFrame(ff['injections']['mass1_source']).iloc[position[0:-1], 0]
     m2sels = pd.DataFrame(ff['injections']['mass2_source']).iloc[position[0:-1], 0]
     qsels = m2sels/m1sels
+
+plt.scatter(m1sels, m2sels)
+plt.savefig('./sels.pdf')
+exit()
 
 luminosity_distances = np.linspace(1, 10000, 1000)
 redshifts = np.array(
@@ -245,7 +253,7 @@ nwalkers, ndim = pos.shape
 import emcee
 
 # To be run on cluster with backending
-filename = "data/selection.txt"
+filename = "data/selection_samples.txt"
 backend = emcee.backends.HDFBackend(filename) 
 N_samples = 1000
 
