@@ -134,6 +134,7 @@ def in_cdf_transform(samples, trans):
     return np.quantile(samples, U)
 
 from sklearn.mixture import GaussianMixture
+from xlearn.neighbors import KernelDesnity
 def kde(posterior):
     m1 = posterior['mass_1']
     m2 = posterior['mass_2']
@@ -152,7 +153,10 @@ def kde(posterior):
 #     DL = np.random.choice(posterior['luminosity_distance'].values, dL.shape[0], replace=False, p=weights)
 
     # kde = gaussian_kde(parameters, weights=(1/posterior['luminosity_distance']**2))
-    kde = gaussian_kde(parameters)
+    # kde = gaussian_kde(parameters)
+
+    kde = KernelDensity(kernel='gaussian', bandwidth=0.5).fit(parameters)
+
     return kde
 
 
@@ -326,37 +330,37 @@ for posterior in posteriors:
     
     parameters = np.array([m1, m2, dL]).transpose()
     model = kde(posterior)  
-    kernel = model.resample(size = 50000).T
+    # kernel = model.resample(size = 50000).T
 
-    m1_fkde = in_cdf_transform(m1, kernel[:, 0][:4096])
-    m2_fkde = in_cdf_transform(m2, kernel[:, 1][:4096])
-    dL_fkde = in_cdf_transform(dL, kernel[:, 2][:4096])
+    # m1_fkde = in_cdf_transform(m1, kernel[:, 0][:4096])
+    # m2_fkde = in_cdf_transform(m2, kernel[:, 1][:4096])
+    # dL_fkde = in_cdf_transform(dL, kernel[:, 2][:4096])
 
-    m1_kde.append(m1_fkde)
-    m2_kde.append(m2_fkde)
-    dL_kde.append(dL_fkde)
+    # m1_kde.append(m1_fkde)
+    # m2_kde.append(m2_fkde)
+    # dL_kde.append(dL_fkde)
     
-    # import pickle
-    # with open(f'ig_nb/kde_det_pkl/{i}de_farr_full.pkl', 'wb') as file:
-    #     pickle.dump(model, file)
+    import pickle
+    with open(f'ig_nb/kde_det_pkl/{i}de_jax.pkl', 'wb') as file:
+        pickle.dump(model, file)
 
-    param = np.array([m1_fkde, m2_fkde, dL_fkde]).transpose()
-    # param1 = np.array([kernel[:,0][:4096], kernel[:,1][:4096], kernel[:,2][:4096]]).transpose()
+    # param = np.array([m1_fkde, m2_fkde, dL_fkde]).transpose()
+    # # param1 = np.array([kernel[:,0][:4096], kernel[:,1][:4096], kernel[:,2][:4096]]).transpose()
 
-    figure = corner.corner(parameters, labels=labels)
-    figure1 = corner.corner(param, labels=labels, fig=figure, color='orange')
-#     figure2 = corner.corner(param1, labels=labels, fig=figure1, color='red')
-    plt.savefig(f'/home/manchun.yeung/population/simon/popnflow/ig_nb/plots/{i}tkde.png')
-    plt.close()
-    # model.save(f'kde_det_pkl/{i}de.pkl')
+    # figure = corner.corner(parameters, labels=labels)
+    # figure1 = corner.corner(param, labels=labels, fig=figure, color='orange')
+# #     figure2 = corner.corner(param1, labels=labels, fig=figure1, color='red')
+    # plt.savefig(f'./plots/{i}tkde.png')
+    # plt.close()
+    # # model.save(f'kde_det_pkl/{i}de.pkl')
 
-    i+=1
+    # i+=1
 
 
-m1 = np.concatenate(m1_kde)
-m2 = np.concatenate(m2_kde)
-dL = np.concatenate(dL_kde)
+# m1 = np.concatenate(m1_kde)
+# m2 = np.concatenate(m2_kde)
+# dL = np.concatenate(dL_kde)
 
-np.savetxt('models/m1_tkde.txt', m1)
-np.savetxt('models/m2_tkde.txt', m2)
-np.savetxt('models/dL_tkde.txt', dL)
+# np.savetxt('models/m1_tkde.txt', m1)
+# np.savetxt('models/m2_tkde.txt', m2)
+# np.savetxt('models/dL_tkde.txt', dL)
