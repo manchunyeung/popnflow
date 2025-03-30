@@ -49,6 +49,15 @@ jax.config.update("jax_enable_x64", True)
 # jax.config.update('jax_default_matmul_precision', jax.lax.Precision.HIGHEST)
 jax.config.update('jax_default_matmul_precision', 'highest')
 
+def timer(func):
+    def wrapper(*args, **kwargs):
+        start = time.time()
+        result = func(*args, **kwargs)
+        elapsed = time.time() - start
+        print(f"{func.__name__} took {elapsed:.4f} seconds")
+        return result
+    return wrapper
+
 from jaxinterp2d import interp2d, CartesianGrid
 
 H0Planck = Planck15.H0.value
@@ -228,8 +237,7 @@ e=0 # +10 for things
 
 print(ra.shape)
 
-# nEvents 
-nEvents = 1
+# nEvents = 69 
 nsamp = 4096
 ra = ra.reshape(nEvents,nsamps)[:,0:nsamp]#.flatten()
 dec = dec.reshape(nEvents,nsamps)[:,0:nsamp]#.flatten()
@@ -465,8 +473,23 @@ def logfq(m1,m2,beta):
 
     return log_pq
 
+
+@jit
+def fq(q,beta):
+    # q = m2/m1
+    pq = mass_ratio**beta
+    pq = pq/jnp.trapezoid(pq,mass_ratio)
+
+    log_pq = jnp.interp(q,mass_ratio,pq)
+
+    return log_pq
+
+
+
+
 @jit
 def log_p_pop_pl_pl(m1,m2,z,m_min_1,m_max_1,alpha_1,dm_min_1,dm_max_1,beta,mu,sigma,f1,gamma1):
+    # start_time = time.time()
     log_dNdm1 = logpm1_powerlaw_powerlaw(m1,z,m_min_1,m_max_1,alpha_1,dm_min_1,dm_max_1,mu,sigma,f1)
     log_dNdm2 = logpm1_powerlaw_powerlaw(m2,z,m_min_1,m_max_1,alpha_1,dm_min_1,dm_max_1,mu,sigma,f1)
     log_fq = logfq(m1,m2,beta)
@@ -474,10 +497,88 @@ def log_p_pop_pl_pl(m1,m2,z,m_min_1,m_max_1,alpha_1,dm_min_1,dm_max_1,beta,mu,si
 
     log_p_sz = np.log(0.25) # 1/2 for each spin dimension
 
+    end_time = time.time()
+    # print('time0', end_time-start_time)
     return log_p_sz + log_dNdm1 + log_dNdm2 + log_fq + log_dvdz
 @jit
 def logdiffexp(x, y):
     return x + jnp.log1p(jnp.exp(y-x))
+
+@jit
+def pm1_powerlaw_powerlaw(m1,m_min_1=5,m_max_1=80,alpha_1=3.3,dm_min_1=1,dm_max_1=10,mu=50,sigma=3,f1=0.4):
+    p1 = jnp.exp(logpm1_powerlaw(m1,m_min_1,m_max_1,alpha_1,dm_min_1,dm_max_1))
+    p2 = jnp.exp(logpm1_peak(m1,mu,sigma))
+
+    pm1 = (1-f1)*p1 + f1*p2
+    return pm1
+
+@jit
+def powerlaw(xx, high, low, beta=2):
+    norm = jnp.where(
+        jnp.array(beta) == -1,
+        1 / jnp.log(high / low),
+        (1 + beta) / jnp.array(high ** (1 + beta) - low ** (1 + beta)),
+    )
+    prob = jnp.power(xx, beta)
+    prob *= norm
+    prob *= (xx <= high) & (xx >= low)
+    return prob
+
+@jit
+def log_p_pop_lvk(m1,m2,z,m_min_1,m_max_1,alpha_1,dm_min_1,dm_max_1,beta,mu,sigma,f1,gamma1):
+    # start_time = time.time()
+    log_dNdm1 = logpm1_powerlaw_powerlaw(m1,z,m_min_1,m_max_1,alpha_1,dm_min_1,dm_max_1,mu,sigma,f1)
+    log_dNdm2 = logpm1_powerlaw_powerlaw(m2,z,m_min_1,m_max_1,alpha_1,dm_min_1,dm_max_1,mu,sigma,f1)
+    log_fq = logfq(m1,m2,beta)
+    log_dvdz = jnp.log(dV_of_z_normed(z,Om0Planck,gamma1))
+
+    log_p_sz = np.log(0.25) # 1/2 for each spin dimension
+
+    # end_time = time.time()
+    # print('time0', end_time-start_time)
+    return log_p_sz + log_dNdm1 + log_fq + log_dvdz
+# @jit
+# def log_p_pop_lvk(m1,m2,z,m_min_1,m_max_1,alpha_1,dm_min_1,dm_max_1,beta,mu,sigma,f1,gamma1):
+#     # start_time0 = time.time()
+    
+#     log_dVdz = jnp.log(dV_of_z_normed(z,Om0Planck,gamma1))
+#     log_p_sz = jnp.log(0.25)
+   
+#     # end_time = time.time()
+#     # print('time1', end_time-start_time0)
+    
+#     @jit
+#     def log_two_component_primary_mass_ratio(
+#         m1, m2, m_min_1, m_max_1, alpha_1, dm_min_1, dm_max_1, mu, sigma, f1
+#     ):
+#         r"""
+#         Power law model for two-dimensional mass distribution, modelling primary
+#         mass and conditional mass ratio distribution.
+    
+#         .. math::
+#             p(m_1, q) = p(m1) p(q | m_1)
+    
+#         """
+        
+#         # start_time = time.time()
+#         log_pm1 = logpm1_powerlaw_powerlaw(m1,z,m_min_1,m_max_1,alpha_1,dm_min_1,dm_max_1,mu,sigma,f1)
+#         # p_m1 = pm1_powerlaw_powerlaw(m1, m_min_1, m_max_1, alpha_1, dm_min_1, dm_max_1, mu, sigma, f1)
+#         q = m2/m1
+#         log_pq = jnp.log(powerlaw(q, beta, 1, m_min_1/m1))
+#         # end_time = time.time()
+#         # print('time2', end_time-start_time)
+
+#         prob = log_pm1 + log_pq
+#         return prob
+    
+#     # pm1q = two_component_primary_mass_ratio(m1, m2, m_min_1, m_max_1, alpha_1, dm_min_1, dm_max_1, mu, sigma, f1)
+#     log_pm1q = log_two_component_primary_mass_ratio(
+#         m1, m2, m_min_1, m_max_1, alpha_1, dm_min_1, dm_max_1, mu, sigma, f1
+#     )
+    
+#     # end_time = time.time()
+#     # print('time3', end_time-start_time0)
+#     return log_pm1q + log_dVdz + log_p_sz
 
 # from scipy.integrate import cumtrapz
 from scipy.integrate import cumulative_trapezoid as cumtrapz
@@ -501,22 +602,6 @@ def z_sampling(n_samples, gamma=3.0):
     return inverse_cdfz(u)
 
 def m1_q_samples(n_samples, m_min_1=5,m_max_1=80,alpha_1=3.3,dm_min_1=1,dm_max_1=10,beta=1,mu=50,sigma=3,f1=0.4):
-    def pm1_powerlaw_powerlaw(m1,m_min_1=5,m_max_1=80,alpha_1=3.3,dm_min_1=1,dm_max_1=10,mu=50,sigma=3,f1=0.4):
-        p1 = jnp.exp(logpm1_powerlaw(m1,m_min_1,m_max_1,alpha_1,dm_min_1,dm_max_1))
-        p2 = jnp.exp(logpm1_peak(m1,mu,sigma))
-    
-        pm1 = (1-f1)*p1 + f1*p2
-        return pm1
-    def powerlaw(xx, high, low, beta=2):
-        norm = np.where(
-            np.array(alpha_1) == -1,
-            1 / np.log(high / low),
-            (1 + alpha_1) / np.array(high ** (1 + alpha_1) - low ** (1 + alpha_1)),
-        )
-        prob = np.power(xx, alpha_1)
-        prob *= norm
-        prob *= (xx <= high) & (xx >= low)
-        return prob
     
     def two_component_primary_mass_ratio(
         dataset, m_min_1, m_max_1, alpha_1, dm_min_1, dm_max_1, mu, sigma, f1
@@ -531,7 +616,9 @@ def m1_q_samples(n_samples, m_min_1=5,m_max_1=80,alpha_1=3.3,dm_min_1=1,dm_max_1
         """
 
         p_m1 = pm1_powerlaw_powerlaw(dataset["mass_1"], m_min_1, m_max_1, alpha_1, dm_min_1, dm_max_1, mu, sigma, f1)
-        p_q = powerlaw(dataset["mass_ratio"], beta, 1, m_min_1/dataset["mass_1"])
+        # p_q = powerlaw(dataset["mass_ratio"], beta, 1, m_min_1/dataset["mass_1"])
+        
+        p_q = fq(dataset['mass_ratio'], beta)
         prob = p_m1 * p_q
         return prob
 
@@ -565,18 +652,17 @@ def m1_q_samples(n_samples, m_min_1=5,m_max_1=80,alpha_1=3.3,dm_min_1=1,dm_max_1
 kdes = []
 import pickle
 for i in range(nEvents):
-    with open(f'./kde_det_pkl/{i}de_jax_dl2.pkl', 'rb') as file:
+    with open(f'./kde_det_pkl/{i}de_1000.pkl', 'rb') as file:
         kde = pickle.load(file)
     kdes.append(kde)
     # kdes.append((jnp.array(kde.dataset.T), kde.covariance_factor()))
 
-
+print(len(kdes), 'len_kde')
 seed = np.random.randint(1000)
 key = jax.random.PRNGKey(1000)
 
-def spectral_siren_log_likelihood_nosky(gamma1=3,m_min_1=5,m_max_1=80,alpha_1=3.3,dm_min_1=1,dm_max_1=10,beta=1,mu=50,sigma=3,f1=0.4):
-    start_time = time.time()
-    
+@timer
+def spectral_siren_log_likelihood_nosky(gamma1=3, m_min_1=5,m_max_1=80,alpha_1=3.3,dm_min_1=1,dm_max_1=10,beta=1,mu=50,sigma=3,f1=0.4):
     zsels = z_of_dL(dLsels, H0Planck,Om0Planck)
     m1sels = m1detsels/(1+zsels)
     m2sels = m2detsels/(1+zsels)
@@ -602,18 +688,18 @@ def spectral_siren_log_likelihood_nosky(gamma1=3,m_min_1=5,m_max_1=80,alpha_1=3.
     m1 /= weights
     m2 /= weights
     
-
-    log_weights = log_p_pop_pl_pl(m1,m2,z,m_min_1,m_max_1,alpha_1,dm_min_1,dm_max_1,beta,mu,sigma,f1,gamma1)
-
-    log_weights += - jnp.log(ddL_of_z(z,dL,H0Planck,Om0Planck)) - 2*jnp.log(dL) - 2*jnp.log1p(z)
+    # log_weights = log_p_pop_pl_pl(m1,m2,z,m_min_1,m_max_1,alpha_1,dm_min_1,dm_max_1,beta,mu,sigma,f1,gamma1)
+    log_weights = log_p_pop_lvk(m1,m2,z,m_min_1,m_max_1,alpha_1,dm_min_1,dm_max_1,beta,mu,sigma,f1,gamma1)
+    # print('mean', jnp.mean(log_weights))
+    log_weights += - jnp.log(ddL_of_z(z,dL,H0Planck,Om0Planck)) - 2*jnp.log(dL) - 2*jnp.log1p(z) - jnp.log(m1)
 
     nsamp1 = 4096
     log_weights = log_weights.reshape((nEvents,nsamp1))
     ll += jnp.sum(-jnp.log(nsamp1) + jnp.nan_to_num(logsumexp(log_weights,axis=-1)))
 
 
-    end_time = time.time()
-    etime = end_time - start_time
+    # end_time = time.time()
+    # etime = end_time - start_time
     # print('etime', etime)
     return ll, Neff
 
@@ -708,10 +794,11 @@ def kde_eval(x, dataset, weights, covariance, mask):
     density = jnp.sum(weights * kernel_vals * mask) / jnp.prod(bandwidth)
     return density
 
-def spectral_siren_log_likelihood_nosky_kde(gamma1=3, m_min_1=5,m_max_1=80,alpha_1=3.3,dm_min_1=1,dm_max_1=10,beta=1,mu=50,sigma=3,f1=0.4):
-    start_time = time.time()
+@timer
+def spectral_siren_log_likelihood_nosky_kde(gamma1 = 3, m_min_1=5,m_max_1=80,alpha_1=3.3,dm_min_1=1,dm_max_1=10,beta=1,mu=50,sigma=3,f1=0.4):
     n_samples=nEvents*nsamp
-    
+    # gamma1 = 0 
+    # start_time = time.time()
     zsels = z_of_dL(dLsels, H0Planck,Om0Planck)
     m1sels = m1detsels/(1+zsels)
     m2sels = m2detsels/(1+zsels)
@@ -729,6 +816,8 @@ def spectral_siren_log_likelihood_nosky_kde(gamma1=3, m_min_1=5,m_max_1=80,alpha
     ll = jnp.where((Neff <= 4 * nEvents), ll, 0)
     ll += -nEvents*log_mu + nEvents*(3 + nEvents)/(2*Neff)
 
+    # start_time = time.time()
+    
     m1, q = m1_q_samples(n_samples, m_min_1, m_max_1, alpha_1, dm_min_1, dm_max_1, mu, sigma, f1)
     m2 = q * m1
     
@@ -742,55 +831,60 @@ def spectral_siren_log_likelihood_nosky_kde(gamma1=3, m_min_1=5,m_max_1=80,alpha
 
     kde_data = []
 
+    # end_time = time.time()
+    # etime = end_time - start_time
+    
+    # print(f'time1:{etime}')
+
     def evaluate_kdes(points):
-        return sum(kde(points) for kde in kdes)
+        return sum(jnp.log(kde(points)) for kde in kdes)
     
-    def kde_sum(dataset_list, weights_list, covariance_list, mask_list, points):
-        results = []
-        for dataset, weights, covariance, mask in zip(dataset_list, weights_list, covariance_list, mask_list):
-            kde_values = jax.vmap(kde_eval, in_axes=(1, None, None, None, None))(
-                        points, dataset, weights, covariance, mask
-                )
-            results.append(kde_values)
+    # def kde_sum(dataset_list, weights_list, covariance_list, mask_list, points):
+    #     results = []
+    #     for dataset, weights, covariance, mask in zip(dataset_list, weights_list, covariance_list, mask_list):
+    #         kde_values = jax.vmap(kde_eval, in_axes=(1, None, None, None, None))(
+    #                     points, dataset, weights, covariance, mask
+    #             )
+    #         results.append(kde_values)
                 
-        return jnp.sum(jnp.stack(results), axis=0)
+    #     return jnp.sum(jnp.stack(results), axis=0)
 
-    def kde_memory_efficient(dataset, weights, covariance, mask, points, point_chunk_size=256):
-        """
-        Evaluate KDE in a memory-efficient way by processing points in chunks.
+    # def kde_memory_efficient(dataset, weights, covariance, mask, points, point_chunk_size=256):
+    #     """
+    #     Evaluate KDE in a memory-efficient way by processing points in chunks.
 
-        Args:
-            dataset: (3, 50000) KDE dataset
-            weights: (50000,) KDE weights
-            covariance: Covariance matrix
-            mask: Mask array
-            points: (3, 4096) array of evaluation points
-            point_chunk_size: Number of points to process at once
+    #     Args:
+    #         dataset: (3, 50000) KDE dataset
+    #         weights: (50000,) KDE weights
+    #         covariance: Covariance matrix
+    #         mask: Mask array
+    #         points: (3, 4096) array of evaluation points
+    #         point_chunk_size: Number of points to process at once
 
-        Returns:
-            KDE estimate of shape (4096,)
-        """
-        n_points = points.shape[1]
-        total_pdf = jnp.zeros(n_points)
+    #     Returns:
+    #         KDE estimate of shape (4096,)
+    #     """
+    #     n_points = points.shape[1]
+    #     total_pdf = jnp.zeros(n_points)
 
-        for j in range(0, n_points, point_chunk_size):
-            point_chunk = points[:, j:j + point_chunk_size]
+    #     for j in range(0, n_points, point_chunk_size):
+    #         point_chunk = points[:, j:j + point_chunk_size]
 
-            kde_values = jax.vmap(
-                kde_eval, in_axes=(1, None, None, None, None)
-            )(point_chunk, dataset, weights, covariance, mask)
+    #         kde_values = jax.vmap(
+    #             kde_eval, in_axes=(1, None, None, None, None)
+    #         )(point_chunk, dataset, weights, covariance, mask)
 
-            total_pdf = total_pdf.at[j:j + point_chunk_size].set(kde_values)
+    #         total_pdf = total_pdf.at[j:j + point_chunk_size].set(kde_values)
 
-        return total_pdf
+    #     return total_pdf
 
     
     
-    datasets, weights, dataset_masks, covariances = get_kde_info(kdes)
-    datasets = jnp.stack(datasets)[0]
-    weights = jnp.stack(weights)[0]
-    dataset_masks = jnp.stack(dataset_masks)[0]
-    covariances = jnp.stack(covariances)[0]
+    # datasets, weights, dataset_masks, covariances = get_kde_info(kdes)
+    # datasets = jnp.stack(datasets)[0]
+    # weights = jnp.stack(weights)[0]
+    # dataset_masks = jnp.stack(dataset_masks)[0]
+    # covariances = jnp.stack(covariances)[0]
     # print(covariances)
     # print(datasets.shape, weights.shape, dataset_masks.shape, covariances.shape)
     # print(points.shape, 'shape')
@@ -807,10 +901,17 @@ def spectral_siren_log_likelihood_nosky_kde(gamma1=3, m_min_1=5,m_max_1=80,alpha
     # results = jnp.sum(densities, axis=0)
 
     ## Attempt_2 simply compute kde using sum(), all built-in methods - fastest
-    # results = evaluate_kdes(points)
+    
+    # start_time = time.time()
+    
+    results = evaluate_kdes(points)
 
+    # end_time = time.time()
+    # etime = end_time - start_time
+    
+    # print(f'time2:{etime}')
     ## Attempt_3 slicing data to reduce memory burden - slower than 2
-    results = kde_memory_efficient(datasets, weights, covariances, dataset_masks, points)
+    # results = kde_memory_efficient(datasets, weights, covariances, dataset_masks, points)
 
     # for kde in kdes:
     #     print('num', i)
@@ -820,56 +921,95 @@ def spectral_siren_log_likelihood_nosky_kde(gamma1=3, m_min_1=5,m_max_1=80,alpha
     # print('after')
    
     dL1 = dL
-    # log_weights += jnp.log(ddL_of_z(z,dL1,H0Planck,Om0Planck)) - 2*jnp.log(dL1) + 2*jnp.log1p(z) - jnp.log(m1)
-    log_weights += jnp.log(ddL_of_z(z,dL1,H0Planck,Om0Planck))+ 2*jnp.log1p(z) - jnp.log(m1)
+    log_weights += jnp.log(ddL_of_z(z,dL1,H0Planck,Om0Planck)) - 2*jnp.log(dL1) + 2*jnp.log1p(z) - jnp.log(m1)
+    # log_weights += jnp.log(ddL_of_z(z,dL1,H0Planck,Om0Planck))+ 2*jnp.log1p(z) - jnp.log(m1)
     log_weights = log_weights.reshape((nEvents,nsamp))
     ll += jnp.sum(-jnp.log(nsamp) + jnp.nan_to_num(logsumexp(log_weights,axis=-1)))
 
-    end_time = time.time()
-    etime = end_time - start_time
+    # end_time = time.time()
+    # etime = end_time - start_time
     # print('etime', etime)
     return ll, Neff
 
 from scipy.stats import norm
+# def cdf(samples):
+#     sorted_samples = np.sort(samples)
+#     # The CDF value for each sample is its rank (number of samples <= that value) divided by the total number of samples
+#     cdf_values = np.arange(1, len(sorted_samples) + 1) / len(sorted_samples)
+
+#     min_val = samples.min()
+#     max_val = samples.max()
+    
+#     U = np.zeros_like(samples)
+    
+#     # Apply normalization only where theta is not min or max
+#     mask = (samples != min_val) & (samples != max_val)
+
+#     def find_cdf(sample_value):
+#         # Ensure sample_value is a numpy array for consistent processing
+#         sample_value = np.asarray(sample_value)
+        
+#         # Initialize an array to hold the CDF results
+#         cdf_result = np.zeros_like(sample_value, dtype=float)
+        
+#         for i, value in enumerate(sample_value):
+#             # Find the index where the sample value would fit in the sorted array
+#             index = np.searchsorted(sorted_samples, value)
+#             if index == 0:
+#                 cdf_result[i] = 0.0  # If the sample value is less than the smallest sample
+#             elif index >= len(cdf_values):
+#                 cdf_result[i] = 1.0  # If the sample value is greater than the largest sample
+#             else:
+#                 cdf_result[i] = cdf_values[index - 1]  # Return the corresponding CDF value
+                
+#         return cdf_result
+
+#     U[mask] = find_cdf(samples[mask])
+#     transformed_samples = np.zeros_like(samples)
+#     transformed_samples = norm.ppf(U[mask])
+#     return transformed_samples
+
 def cdf(samples):
     sorted_samples = np.sort(samples)
-    # The CDF value for each sample is its rank (number of samples <= that value) divided by the total number of samples
     cdf_values = np.arange(1, len(sorted_samples) + 1) / len(sorted_samples)
-
     min_val = samples.min()
     max_val = samples.max()
-    
     U = np.zeros_like(samples)
-    
-    # Apply normalization only where theta is not min or max
-    mask = (samples != min_val) & (samples != max_val)
 
+    # Apply normalization for all values
     def find_cdf(sample_value):
-        # Ensure sample_value is a numpy array for consistent processing
         sample_value = np.asarray(sample_value)
-        
-        # Initialize an array to hold the CDF results
         cdf_result = np.zeros_like(sample_value, dtype=float)
-        
         for i, value in enumerate(sample_value):
-            # Find the index where the sample value would fit in the sorted array
             index = np.searchsorted(sorted_samples, value)
             if index == 0:
-                cdf_result[i] = 0.0  # If the sample value is less than the smallest sample
+                cdf_result[i] = 0.0
             elif index >= len(cdf_values):
-                cdf_result[i] = 1.0  # If the sample value is greater than the largest sample
+                cdf_result[i] = 1.0
             else:
-                cdf_result[i] = cdf_values[index - 1]  # Return the corresponding CDF value
-                
+                cdf_result[i] = cdf_values[index - 1]
         return cdf_result
 
-    U[mask] = find_cdf(samples[mask])
-    transformed_samples = np.zeros_like(samples)
-    transformed_samples = norm.ppf(U[mask])
+    # Calculate U for all values
+    U = find_cdf(samples)
+
+    # Transform all values using norm.ppf
+    # Add small epsilon to avoid inf values at 0 and 1
+    epsilon = 1e-10
+    U = np.clip(U, epsilon, 1 - epsilon)
+    transformed_samples = norm.ppf(U)
     return transformed_samples
 
 
-gmm = pickle.load('./gmm_trans_pkl/0de.pkl')
+
+
+with open('./gmm_cdf_pkl/0de.pkl', 'rb') as f:
+    gmm = pickle.load(f)
+
+def in_cdf_transform(samples, trans):
+    U = norm.cdf(trans)
+    return np.quantile(samples, U)
+
 
 def spectral_siren_log_likelihood_nosky_gmm(gamma1=3, m_min_1=5,m_max_1=80,alpha_1=3.3,dm_min_1=1,dm_max_1=10,beta=1,mu=50,sigma=3,f1=0.4):
     start_time = time.time()
@@ -901,9 +1041,14 @@ def spectral_siren_log_likelihood_nosky_gmm(gamma1=3, m_min_1=5,m_max_1=80,alpha
     m1det = m1*(1+z)
     m2det = m2*(1+z)
     points = jnp.vstack([m1det, m2det, dL])
-    log_weights = np.zeros(m1det.shape[0])
 
-    trans_param = np.vstack([cdf(m1det), cdf(m2det), cdf(dL)])
+    trans_m1 = cdf(m1det)
+    trans_m2 = cdf(m2det)
+    trans_dL = cdf(dL)
+
+
+    trans_param = np.column_stack((trans_m1, trans_m2, trans_dL))
+    log_weights = np.zeros(trans_m1.shape[0])
     results = gmm.score_samples(trans_param)
 
     log_weights += results
@@ -973,7 +1118,7 @@ def likelihood(coord):
     for i in range(len(coord)):
         if (coord[i]<lower_bound[i] or coord[i]>upper_bound[i]):
             return -np.inf
-    ll, Neff = spectral_siren_log_likelihood_nosky_gmm(*coord)
+    ll, Neff = spectral_siren_log_likelihood_nosky(*coord)
     if np.isnan(ll):
         return -np.inf
     if (Neff < 4*nEvents):
@@ -1077,12 +1222,12 @@ print('Number of posterior samples (using dynamic sampler) is {}'.format(dpostsa
 fig = corner.corner(dpostsamples, labels=labels, hist_kwargs={'density': True})
 
 plt.show()
-plt.savefig('./iggy_gwtc3-degmm1.png')
+plt.savefig('./iggy_gwtc3-t.png')
 
 import pickle
 
 # open a file, where you ant to store the data
-file = open('plbump-GWTC3-degmm1.pkl', 'wb')
+file = open('plbump-GWTC3-t.pkl', 'wb')
 
 # dump information to that file
 pickle.dump(dres, file)
