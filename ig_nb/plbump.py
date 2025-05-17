@@ -28,6 +28,12 @@ from jax.scipy.special import logsumexp
 from scipy.interpolate import interp1d
 from tqdm import tqdm
 
+from line_profiler import LineProfiler, profile
+
+from jax.scipy.stats import norm, multivariate_normal
+from functools import partial
+
+
 import matplotlib
 # get_ipython().run_line_magic('matplotlib', 'inline')
 
@@ -133,7 +139,7 @@ with h5py.File('./GWTC-3_posterior_samples_m1detm2detdLradec_4096_1peryear.h5', 
 
 print(ra.shape)
 
-nEvents=1
+nEvents=10
 
 ra = ra[:4096*nEvents]
 dec = dec[:4096*nEvents]
@@ -215,29 +221,29 @@ e=0 # +10 for things
 
 
 ## Load samples from events
-# for event in list(GWTC3_events.keys()):
-#     # if e==60:
-#     #     break
-#     _posterior = pd.DataFrame()
-#     waveform = GWTC3_events[event]
-#     # if e>=50:
-#     # if((ra.shape[0]/4096)!=(e+10)):
-#     #     print(e, ra.shape)
-#     with h5py.File("../GWTC-3/{}.h5".format(event)) as ff:
-#         # for my_key, gwtc_key in parameter_translator_1.items():
-#             # _posterior[my_key] = ff[waveform]['posterior_samples'][gwtc_key][:nsamps]
-#         m1det = jnp.append(m1det, ff[waveform]['posterior_samples']['mass_1'][:nsamps]) 
-#         m2det = jnp.append(m2det, ff[waveform]['posterior_samples']['mass_2'][:nsamps])
-#         dL = jnp.append(dL, ff[waveform]['posterior_samples']['luminosity_distance'][:nsamps])
-#         ra = jnp.append(ra, ff[waveform]['posterior_samples']['ra'][:nsamps])
-#         dec = jnp.append(dec, ff[waveform]['posterior_samples']['dec'][:nsamps])
-#     posteriors.append(_posterior)
-#     e+=1
+for event in list(GWTC3_events.keys()):
+    # if e==60:
+    #     break
+    _posterior = pd.DataFrame()
+    waveform = GWTC3_events[event]
+    # if e>=50:
+    # if((ra.shape[0]/4096)!=(e+10)):
+    #     print(e, ra.shape)
+    with h5py.File("../GWTC-3/{}.h5".format(event)) as ff:
+        # for my_key, gwtc_key in parameter_translator_1.items():
+            # _posterior[my_key] = ff[waveform]['posterior_samples'][gwtc_key][:nsamps]
+        m1det = jnp.append(m1det, ff[waveform]['posterior_samples']['mass_1'][:nsamps]) 
+        m2det = jnp.append(m2det, ff[waveform]['posterior_samples']['mass_2'][:nsamps])
+        dL = jnp.append(dL, ff[waveform]['posterior_samples']['luminosity_distance'][:nsamps])
+        ra = jnp.append(ra, ff[waveform]['posterior_samples']['ra'][:nsamps])
+        dec = jnp.append(dec, ff[waveform]['posterior_samples']['dec'][:nsamps])
+    posteriors.append(_posterior)
+    e+=1
 # print(e)
 
 print(ra.shape)
 
-# nEvents = 69 
+nEvents = 69 
 nsamp = 4096
 ra = ra.reshape(nEvents,nsamps)[:,0:nsamp]#.flatten()
 dec = dec.reshape(nEvents,nsamps)[:,0:nsamp]#.flatten()
@@ -404,8 +410,6 @@ def dV_of_z_normed(z,Om0,gamma):
     prob = dV/jnp.trapezoid(dV,zgrid)
     return jnp.interp(z,zgrid,prob)
 
-
-from jax.scipy.stats import norm
 
 mass = jnp.linspace(1, 250, 2000)
 mass_ratio =  jnp.linspace(0, 1, 2000)
@@ -584,69 +588,217 @@ def log_p_pop_lvk(m1,m2,z,m_min_1,m_max_1,alpha_1,dm_min_1,dm_max_1,beta,mu,sigm
 from scipy.integrate import cumulative_trapezoid as cumtrapz
 
 ## draw samples from p(z) and p(m1, q)
-def z_sampling(n_samples, gamma=3.0):
-    def pz(z, gamma=3.0):
-        dV = dV_of_z(z,H0Planck,Om0)*(1+z)**(gamma-1)
-        prob = dV/jnp.trapezoid(dV,z)
-        return prob
-
-    z_vals = jnp.linspace(0, 5, 2000)
-    pdf_zvalues = pz(z_vals, gamma)
-    cdf_zvalues = cumtrapz(pdf_zvalues, z_vals, initial=0)  # Numerical CDF
-    cdf_zvalues /= cdf_zvalues[-1]  # Normalize to [0, 1]
-
-    # Interpolate the inverse CDF
-    inverse_cdfz = interp1d(cdf_zvalues, z_vals, bounds_error=False, fill_value=(z_vals[0], z_vals[-1]))
-    u = np.random.uniform(0, 1, n_samples)  # Uniform samples
+# def z_sampling(n_samples, gamma=3.0):
     
-    return inverse_cdfz(u)
+#     @jit
+#     def pz(z, gamma=3.0):
+#         dV = dV_of_z(z,H0Planck,Om0)*(1+z)**(gamma-1)
+#         prob = dV/jnp.trapezoid(dV,z)
+#         return prob
 
-def m1_q_samples(n_samples, m_min_1=5,m_max_1=80,alpha_1=3.3,dm_min_1=1,dm_max_1=10,beta=1,mu=50,sigma=3,f1=0.4):
-    
-    def two_component_primary_mass_ratio(
-        dataset, m_min_1, m_max_1, alpha_1, dm_min_1, dm_max_1, mu, sigma, f1
-    ):
-        r"""
-        Power law model for two-dimensional mass distribution, modelling primary
-        mass and conditional mass ratio distribution.
-    
-        .. math::
-            p(m_1, q) = p(m1) p(q | m_1)
-    
-        """
+#     z_vals = jnp.linspace(0, 5, 2000)
+#     pdf_zvalues = pz(z_vals, gamma)
+#     cdf_zvalues = cumtrapz(pdf_zvalues, z_vals, initial=0)  # Numerical CDF
+#     cdf_zvalues /= cdf_zvalues[-1]  # Normalize to [0, 1]
 
-        p_m1 = pm1_powerlaw_powerlaw(dataset["mass_1"], m_min_1, m_max_1, alpha_1, dm_min_1, dm_max_1, mu, sigma, f1)
-        # p_q = powerlaw(dataset["mass_ratio"], beta, 1, m_min_1/dataset["mass_1"])
+#     # Interpolate the inverse CDF
+#     inverse_cdfz = interp1d(cdf_zvalues, z_vals, bounds_error=False, fill_value=(z_vals[0], z_vals[-1]))
+#     key = jax.random.PRNGKey(42)
+#     u = jax.random.uniform(key, shape=(n_samples,))    
+#     return inverse_cdfz(u)
+
+from jax.scipy.integrate import trapezoid
+
+Z_MAX = 5.0      # Max redshift
+N_GRID = 1000    # Reduced grid size (trade-off: speed vs. accuracy)
+
+_z_vals = jnp.linspace(0, Z_MAX, N_GRID)
+_dV_cache = dV_of_z(_z_vals, H0Planck, Om0)  # Precompute dV/dz
+
+@partial(jit, static_argnames=['n_samples'])
+def z_sampling(n_samples, gamma=3.0, key=None):
+    """Handle dynamic gamma while maximizing performance."""
+    # Compute (1+z)^(gamma-1) term dynamically
+    weight = (1 + _z_vals) ** (gamma - 1)
+    
+    # Compute normalized PDF (vectorized)
+    pdf = _dV_cache * weight
+    pdf /= jnp.trapezoid(pdf, _z_vals)  # Normalization
+    
+    # Compute CDF
+    cdf = jnp.cumsum(pdf) * (_z_vals[1] - _z_vals[0])
+    cdf /= cdf[-1]
+    
+    # Sampling
+    key = jax.random.PRNGKey(42) if key is None else key
+    u = jax.random.uniform(key, (n_samples,))
+    indices = jnp.searchsorted(cdf, u)
+    return _z_vals[indices]
+
+
+# # Precompute z_vals and CDF once (if gamma is fixed)
+# _z_vals = jnp.linspace(0, Z_MAX, N_GRID)
+# _dV_cache = jnp.zeros_like(_z_vals)  # Cache dV_of_z if possible
+
+# @jit
+# def pz(z, gamma):
+#     dV = dV_of_z(z, H0Planck, Om0) * (1 + z) ** (gamma - 1)
+#     norm = trapezoid(dV, z)  # Faster than manual trapezoid
+#     return dV / norm
+
+# # Precompute CDF for default gamma=3.0 (if known in advance)
+# _pdf_zvalues = pz(_z_vals, 3.0)
+# _cdf_zvalues = jnp.cumsum(_pdf_zvalues) * (_z_vals[1] - _z_vals[0])
+# _cdf_zvalues /= _cdf_zvalues[-1]
+
+# @jit
+# def inverse_cdf(u):
+#     indices = jnp.searchsorted(_cdf_zvalues, u)
+#     return _z_vals[jnp.clip(indices, 0, len(_z_vals) - 1)]
+
+# @timer
+# def z_sampling(n_samples, gamma=3.0, key=None):
+#     key = jax.random.PRNGKey(42) if key is None else key
+#     u = jax.random.uniform(key, shape=(n_samples,))
+#     return inverse_cdf(u)
+
+# @jit
+# @timer
+# def z_sampling(n_samples, gamma=3.0, key=None):
+#     # Assuming dV_of_z is a JAX-compatible function
+#     @jit
+#     def pz(z, gamma=3.0):
+#         dV = dV_of_z(z, H0Planck, Om0) * (1 + z) ** (gamma - 1)
+#         prob = dV / trapezoid(dV, z)
+#         return prob
+
+#     z_vals = jnp.linspace(0, 5, 2000)
+#     pdf_zvalues = pz(z_vals, gamma)
+    
+#     # Compute cumulative integral (CDF)
+#     cdf_zvalues = jnp.cumsum(pdf_zvalues) * (z_vals[1] - z_vals[0])  # Approximate cumulative integral
+#     cdf_zvalues = cdf_zvalues / cdf_zvalues[-1]  # Normalize to [0, 1]
+
+#     # Create inverse CDF function
+#     @jit
+#     def inverse_cdf(u):
+#         # JAX-compatible interpolation
+#         indices = jnp.searchsorted(cdf_zvalues, u)
+#         indices = jnp.clip(indices, 0, len(z_vals) - 1)
+#         return z_vals[indices]
+
+#     if key is None:
+#         key = jax.random.PRNGKey(42)
+#     u = jax.random.uniform(key, shape=(n_samples,))
+    
+#     return inverse_cdf(u)
+
+# @partial(jit, static_argnums=(0,))
+# # @jit
+# def sample_from_pdf(n_samples, m1_range, q_range, p_joint):
+#     cdf = jnp.cumsum(p_joint.ravel())
+#     cdf /= cdf[-1]
+#     uniform_samples = jax.random.uniform(jax.random.PRNGKey(42), (n_samples,))
+#     indices = jnp.searchsorted(cdf, uniform_samples)
+#     q_idx, m1_idx = jnp.unravel_index(indices, p_joint.shape)
+#     return m1_range[m1_idx], q_range[q_idx]
+
+# @profile
+# def m1_q_samples(n_samples, m_min_1=5,m_max_1=80,alpha_1=3.3,dm_min_1=1,dm_max_1=10,beta=1,mu=50,sigma=3,f1=0.4):
+    
+#     @timer
+#     @jit
+#     def two_component_primary_mass_ratio(
+#         dataset, m_min_1, m_max_1, alpha_1, dm_min_1, dm_max_1, mu, sigma, f1
+#     ):
+#         r"""
+#         Power law model for two-dimensional mass distribution, modelling primary
+#         mass and conditional mass ratio distribution.
+    
+#         .. math::
+#             p(m_1, q) = p(m1) p(q | m_1)
+    
+#         """
+
+#         p_m1 = pm1_powerlaw_powerlaw(dataset["mass_1"], m_min_1, m_max_1, alpha_1, dm_min_1, dm_max_1, mu, sigma, f1)
+#         # p_q = powerlaw(dataset["mass_ratio"], beta, 1, m_min_1/dataset["mass_1"])
         
-        p_q = fq(dataset['mass_ratio'], beta)
-        prob = p_m1 * p_q
-        return prob
+#         p_q = fq(dataset['mass_ratio'], beta)
+#         prob = p_m1 * p_q
+#         return prob
 
-    m1_range = np.linspace(m_min_1+0.01, m_max_1, 2000)  # Example range for primary mass
-    q_range = np.linspace(0.01, 1, 2000)  # Example range for mass ratio
+#     m1_range = jnp.linspace(m_min_1+0.01, m_max_1, 2000)  # Example range for primary mass
+#     q_range = jnp.linspace(0.01, 1, 2000)  # Example range for mass ratio
     
-    m1_grid, q_grid = np.meshgrid(m1_range, q_range)
-    dataset = {
-        "mass_1": m1_grid.ravel(),
-        "mass_ratio": q_grid.ravel(),
-    }
+#     m1_grid, q_grid = jnp.meshgrid(m1_range, q_range)
+#     dataset = {
+#         "mass_1": m1_grid.ravel(),
+#         "mass_ratio": q_grid.ravel(),
+#     }
     
-    p_joint = two_component_primary_mass_ratio(dataset, m_min_1, m_max_1, alpha_1, dm_min_1, dm_max_1, mu, sigma, f1).reshape(len(q_range), len(m1_range))
+#     p_joint = two_component_primary_mass_ratio(dataset, m_min_1, m_max_1, alpha_1, dm_min_1, dm_max_1, mu, sigma, f1).reshape(len(q_range), len(m1_range))
     
-    # Step 2: Normalize and compute the CDF
-    p_joint /= np.sum(p_joint)  # Normalize the joint probability
-    cdf = np.cumsum(p_joint.ravel())  # Flatten and compute cumulative sum
-    cdf /= cdf[-1]  # Normalize the CDF to [0, 1]
+#     # Step 2: Normalize and compute the CDF
+#     p_joint /= jnp.sum(p_joint)  # Normalize the joint probability
     
-    # Step 3: Sample from the CDF
-    uniform_samples = np.random.uniform(0, 1, n_samples)
-    sample_indices = np.searchsorted(cdf, uniform_samples)
-    sample_q_indices, sample_m1_indices = np.unravel_index(sample_indices, p_joint.shape)
+#     # return sample_from_pdf(n_samples, m1_range, q_range, p_joint)
+#     cdf = jnp.cumsum(p_joint.ravel())  # Flatten and compute cumulative sum
+#     cdf /= cdf[-1]  # Normalize the CDF to [0, 1]
     
-    sample_m1 = m1_range[sample_m1_indices]
-    sample_q = q_range[sample_q_indices]
+#     # Step 3: Sample from the CDF
+    
+#     key = jax.random.PRNGKey(42)
+#     uniform_samples = jax.random.uniform(key, shape=(n_samples,))
+#     sample_indices = jnp.searchsorted(cdf, uniform_samples)
+#     sample_q_indices, sample_m1_indices = jnp.unravel_index(sample_indices, p_joint.shape)
+    
+#     sample_m1 = m1_range[sample_m1_indices]
+#     sample_q = q_range[sample_q_indices]
 
-    return sample_m1, sample_q
+#     return sample_m1, sample_q
+
+
+GRID_SIZE = 500  # Balance between speed and accuracy
+
+@partial(jit, static_argnums=(0,))  # Make n_samples static
+def m1_q_samples(n_samples, m_min_1=5, m_max_1=80, alpha_1=3.3, dm_min_1=1,
+                dm_max_1=10, beta=1, mu=50, sigma=3, f1=0.4, key=None):
+    """Optimized version that properly handles dynamic n_samples."""
+    
+    # Create grid - these operations are static
+    m1_range = jnp.linspace(m_min_1 + 0.01, m_max_1, GRID_SIZE)
+    q_range = jnp.linspace(0.01, 1, GRID_SIZE)
+    m1_grid, q_grid = jnp.meshgrid(m1_range, q_range, indexing='ij')
+
+    # Compute joint PDF (jitted internally)
+    @jit
+    def compute_pdf(m1, q):
+        p_m1 = pm1_powerlaw_powerlaw(m1, m_min_1, m_max_1, alpha_1, 
+                                    dm_min_1, dm_max_1, mu, sigma, f1)
+        p_q = fq(q, beta)
+        return p_m1 * p_q
+
+    joint_pdf = compute_pdf(m1_grid.ravel(), q_grid.ravel()).reshape(GRID_SIZE, GRID_SIZE)
+    joint_pdf /= jnp.sum(joint_pdf)  # Normalize
+
+    # Compute CDF
+    cdf = jnp.cumsum(joint_pdf.ravel())
+    cdf /= cdf[-1]
+
+    # Sampling - this part handles dynamic n_samples
+    key = jax.random.PRNGKey(42) if key is None else key
+    u = jax.random.uniform(key, shape=(n_samples,))
+    indices = jnp.searchsorted(cdf, u)
+    idx_m1, idx_q = jnp.unravel_index(indices, (GRID_SIZE, GRID_SIZE))
+
+    return m1_range[idx_m1], q_range[idx_q]
+
+
+
+# lp = LineProfiler()
+# lp_wrapper = lp(m1_q_samples)
+# lp_wrapper(10000)
+# lp.print_stats()
 
 ## Import KDEs
 kdes = []
@@ -661,11 +813,12 @@ print(len(kdes), 'len_kde')
 seed = np.random.randint(1000)
 key = jax.random.PRNGKey(1000)
 
-@timer
-def spectral_siren_log_likelihood_nosky(gamma1=3, m_min_1=5,m_max_1=80,alpha_1=3.3,dm_min_1=1,dm_max_1=10,beta=1,mu=50,sigma=3,f1=0.4):
+def spectral_siren_log_likelihood_nosky(m_min_1=5,m_max_1=80,alpha_1=3.3,dm_min_1=1,dm_max_1=10,beta=1,mu=50,sigma=3,f1=0.4):
     zsels = z_of_dL(dLsels, H0Planck,Om0Planck)
     m1sels = m1detsels/(1+zsels)
     m2sels = m2detsels/(1+zsels)
+
+    gamma1 = 3
 
     log_det_weights = log_p_pop_pl_pl(m1sels,m2sels,zsels,m_min_1,m_max_1,alpha_1,dm_min_1,dm_max_1,beta,mu,sigma,f1,gamma1)
 
@@ -794,7 +947,6 @@ def kde_eval(x, dataset, weights, covariance, mask):
     density = jnp.sum(weights * kernel_vals * mask) / jnp.prod(bandwidth)
     return density
 
-@timer
 def spectral_siren_log_likelihood_nosky_kde(gamma1 = 3, m_min_1=5,m_max_1=80,alpha_1=3.3,dm_min_1=1,dm_max_1=10,beta=1,mu=50,sigma=3,f1=0.4):
     n_samples=nEvents*nsamp
     # gamma1 = 0 
@@ -835,6 +987,7 @@ def spectral_siren_log_likelihood_nosky_kde(gamma1 = 3, m_min_1=5,m_max_1=80,alp
     # etime = end_time - start_time
     
     # print(f'time1:{etime}')
+
 
     def evaluate_kdes(points):
         return sum(jnp.log(kde(points)) for kde in kdes)
@@ -880,15 +1033,17 @@ def spectral_siren_log_likelihood_nosky_kde(gamma1 = 3, m_min_1=5,m_max_1=80,alp
 
     
     
-    # datasets, weights, dataset_masks, covariances = get_kde_info(kdes)
-    # datasets = jnp.stack(datasets)[0]
-    # weights = jnp.stack(weights)[0]
-    # dataset_masks = jnp.stack(dataset_masks)[0]
-    # covariances = jnp.stack(covariances)[0]
+    datasets, weights, dataset_masks, covariances = get_kde_info(kdes)
+    datasets = jnp.stack(datasets)[0]
+    weights = jnp.stack(weights)[0]
+    dataset_masks = jnp.stack(dataset_masks)[0]
+    covariances = jnp.stack(covariances)[0]
     # print(covariances)
     # print(datasets.shape, weights.shape, dataset_masks.shape, covariances.shape)
     # print(points.shape, 'shape')
-
+    
+    eval_result = jnp.log(kde_eval(datasets, weights, dataset_masks, covariances, points))
+    
     ## Attempt_1 batching over kde parameters - failed due to memory
     # batched_kde_eval = jax.vmap(
     # lambda dataset, weights, covariance, mask: jax.vmap(
@@ -906,6 +1061,9 @@ def spectral_siren_log_likelihood_nosky_kde(gamma1 = 3, m_min_1=5,m_max_1=80,alp
     
     results = evaluate_kdes(points)
 
+
+    print(np.allclose(results, eval_result), 'check')
+    exit()
     # end_time = time.time()
     # etime = end_time - start_time
     
@@ -931,7 +1089,6 @@ def spectral_siren_log_likelihood_nosky_kde(gamma1 = 3, m_min_1=5,m_max_1=80,alp
     # print('etime', etime)
     return ll, Neff
 
-from scipy.stats import norm
 # def cdf(samples):
 #     sorted_samples = np.sort(samples)
 #     # The CDF value for each sample is its rank (number of samples <= that value) divided by the total number of samples
@@ -969,51 +1126,150 @@ from scipy.stats import norm
 #     transformed_samples = norm.ppf(U[mask])
 #     return transformed_samples
 
-def cdf(samples):
-    sorted_samples = np.sort(samples)
-    cdf_values = np.arange(1, len(sorted_samples) + 1) / len(sorted_samples)
-    min_val = samples.min()
-    max_val = samples.max()
-    U = np.zeros_like(samples)
+# def cdf(samples):
+#     sorted_samples = np.sort(samples)
+#     cdf_values = np.arange(1, len(sorted_samples) + 1) / len(sorted_samples)
+#     min_val = samples.min()
+#     max_val = samples.max()
+#     U = np.zeros_like(samples)
 
-    # Apply normalization for all values
-    def find_cdf(sample_value):
-        sample_value = np.asarray(sample_value)
-        cdf_result = np.zeros_like(sample_value, dtype=float)
-        for i, value in enumerate(sample_value):
-            index = np.searchsorted(sorted_samples, value)
-            if index == 0:
-                cdf_result[i] = 0.0
-            elif index >= len(cdf_values):
-                cdf_result[i] = 1.0
-            else:
-                cdf_result[i] = cdf_values[index - 1]
-        return cdf_result
+#     # Apply normalization for all values
+#     def find_cdf(sample_value):
+#         sample_value = np.asarray(sample_value)
+#         cdf_result = np.zeros_like(sample_value, dtype=float)
+#         for i, value in enumerate(sample_value):
+#             index = np.searchsorted(sorted_samples, value)
+#             if index == 0:
+#                 cdf_result[i] = 0.0
+#             elif index >= len(cdf_values):
+#                 cdf_result[i] = 1.0
+#             else:
+#                 cdf_result[i] = cdf_values[index - 1]
+#         return cdf_result
 
-    # Calculate U for all values
-    U = find_cdf(samples)
+#     # Calculate U for all values
+#     U = find_cdf(samples)
 
-    # Transform all values using norm.ppf
-    # Add small epsilon to avoid inf values at 0 and 1
-    epsilon = 1e-10
-    U = np.clip(U, epsilon, 1 - epsilon)
-    transformed_samples = norm.ppf(U)
-    return transformed_samples
-
-
+#     # Transform all values using norm.ppf
+#     # Add small epsilon to avoid inf values at 0 and 1
+#     epsilon = 1e-10
+#     U = np.clip(U, epsilon, 1 - epsilon)
+#     transformed_samples = norm.ppf(U)
+#     return transformed_samples
 
 
-with open('./gmm_cdf_pkl/0de.pkl', 'rb') as f:
-    gmm = pickle.load(f)
+
+# @partial(jax.jit, static_argnames=['epsilon'])
+# def cdf(samples, epsilon=1e-10):
+#     # Sort samples and create CDF values (vectorized)
+#     sorted_samples = jnp.sort(samples)
+#     n = len(sorted_samples)
+#     cdf_values = jnp.arange(1, n + 1) / n
+    
+#     # Vectorized search and interpolation
+#     def compute_U(values):
+#         indices = jnp.searchsorted(sorted_samples, values)
+        
+#         # Handle edge cases and lookup in one go
+#         return jnp.where(
+#             indices == 0,
+#             0.0,
+#             jnp.where(
+#                 indices >= n,
+#                 1.0,
+#                 cdf_values[indices - 1]
+#             )
+#         )
+    
+#     # Process all samples at once
+#     U = compute_U(samples)
+    
+#     # Clip and transform (vectorized)
+#     U = jnp.clip(U, epsilon, 1 - epsilon)
+#     return norm.ppf(U)
+
+@jax.jit
+def jax_cdf(samples, epsilon=1e-10):
+    """JAX-optimized CDF computation and normal transform."""
+    # Sort samples and create CDF values
+    sorted_samples = jnp.sort(samples)
+    n = len(sorted_samples)
+    cdf_values = jnp.arange(1, n + 1) / n
+    
+    # Vectorized search and interpolation
+    indices = jnp.searchsorted(sorted_samples, samples)
+    U = jnp.where(
+        indices == 0, 0.0,
+        jnp.where(
+            indices >= n, 1.0,
+            cdf_values[indices - 1]
+        )
+    )
+    
+    # Clip and transform
+    U = jnp.clip(U, epsilon, 1 - epsilon)
+    return norm.ppf(U)
+
+# precomputed_cdf = jax.jit(cdf, static_argnums=(0,)).lower(
+#     jax.ShapeDtypeStruct((10000,), jnp.float32)
+# ).compile()
+
+gmms = []
+for i in range(nEvents):
+    with open(f'./gmm_cdf_pkl/{i}de.pkl', 'rb') as f:
+        gmm = pickle.load(f)
+        gmms.append(gmm)
+        
 
 def in_cdf_transform(samples, trans):
     U = norm.cdf(trans)
     return np.quantile(samples, U)
 
+def get_gmm_info(gmms):
+    weights = [gmm.weights_ for gmm in gmms]
+    means = [gmm.means_ for gmm in gmms]
+    covariances = [gmm.covariances_ for gmm in gmms]
+    return weights, means, covariances
 
-def spectral_siren_log_likelihood_nosky_gmm(gamma1=3, m_min_1=5,m_max_1=80,alpha_1=3.3,dm_min_1=1,dm_max_1=10,beta=1,mu=50,sigma=3,f1=0.4):
+mnorm = multivariate_normal
+
+@jit
+def gmm_logpdf(x, weights, means, covariances):    
+       # Compute log-PDF for each component (K, N)
+    def component_logpdf(mean, cov):
+        return mnorm.logpdf(x, mean=mean, cov=cov)
+    
+    log_component_pdfs = jax.vmap(component_logpdf)(means, covariances)  # shape (K, N)
+    
+    # Weighted sum in log-space (logsumexp trick for numerical stability)
+    weighted_log_pdfs = jnp.log(weights)[:, jnp.newaxis] + log_component_pdfs  # shape (K, N)
+    log_pdf = jax.scipy.special.logsumexp(weighted_log_pdfs, axis=0)  # shape (N,)
+    
+    return log_pdf.squeeze()
+
+@jit
+def gmm_logpdf_optimized(x_batch, weights, means, precisions, logdets):
+    """
+    x_batch: (N, 3) - Input points to evaluate
+    Returns: (N,) log probabilities
+    """
+    # Compute quadratic forms: (x - μ)^T Σ^{-1} (x - μ) for all K components
+    diffs = x_batch[:, None, :] - means[None, :, :]  # (N, K, 3)
+    quad_forms = jnp.einsum('nki,kij,nkj->nk', diffs, precisions, diffs)  # (N, K)
+    
+    # Compute log probabilities for all components
+    log_probs = -0.5 * (3 * jnp.log(2 * jnp.pi) + logdets + quad_forms)  # (N, K)
+    
+    # Weighted sum (logsumexp for stability)
+    weighted_log_probs = jnp.log(weights)[None, :] + log_probs  # (N, K)
+    return jax.scipy.special.logsumexp(weighted_log_probs, axis=-1)  # (N,)
+
+# @profile
+def spectral_siren_log_likelihood_nosky_gmm(m_min_1=5,m_max_1=80,alpha_1=3.3,dm_min_1=1,dm_max_1=10,beta=1,mu=50,sigma=3,f1=0.4):
     start_time = time.time()
     n_samples=nEvents*nsamp
+
+    gamma1 = 3
     
     zsels = z_of_dL(dLsels, H0Planck,Om0Planck)
     m1sels = m1detsels/(1+zsels)
@@ -1032,25 +1288,67 @@ def spectral_siren_log_likelihood_nosky_gmm(gamma1=3, m_min_1=5,m_max_1=80,alpha
     ll = jnp.where((Neff <= 4 * nEvents), ll, 0)
     ll += -nEvents*log_mu + nEvents*(3 + nEvents)/(2*Neff)
 
+    # start_time = time.time()
+
+    
     m1, q = m1_q_samples(n_samples, m_min_1, m_max_1, alpha_1, dm_min_1, dm_max_1, mu, sigma, f1)
     m2 = q * m1
-    
+
     z = z_sampling(n_samples, gamma1)
     dL = dL_of_z(z, H0=H0Planck)
+    
+    # end_time = time.time()
+    # etime = end_time - start_time
+    # print('etime', etime)
+    
+    # 0.02 for above
     
     m1det = m1*(1+z)
     m2det = m2*(1+z)
     points = jnp.vstack([m1det, m2det, dL])
 
-    trans_m1 = cdf(m1det)
-    trans_m2 = cdf(m2det)
-    trans_dL = cdf(dL)
+    trans_m1 = jax_cdf(m1det)
+    trans_m2 = jax_cdf(m2det)
+    trans_dL = jax_cdf(dL)
 
 
-    trans_param = np.column_stack((trans_m1, trans_m2, trans_dL))
-    log_weights = np.zeros(trans_m1.shape[0])
-    results = gmm.score_samples(trans_param)
+    trans_param = jnp.column_stack((trans_m1, trans_m2, trans_dL))
+    log_weights = jnp.zeros(trans_m1.shape[0])
+    
 
+    
+    wts, mus, covs = get_gmm_info(gmms)
+    wts = wts[0]
+    mus= mus[0]
+    covs = covs[0]
+    
+    wts = jnp.asarray(wts, dtype=jnp.float32)
+    mus = jnp.asarray(mus, dtype=jnp.float32)
+    covs = jnp.asarray(covs, dtype=jnp.float32)
+    
+    eps = 1e-6
+    covs = covs + eps * jnp.eye(3, dtype=jnp.float32)[None, ...]
+    precisions = jnp.linalg.inv(covs)  # (K, 3, 3)
+    logdets = jnp.log(jnp.linalg.det(covs))
+    
+    
+                                     
+    trans_param = jnp.asarray(trans_param, dtype=jnp.float32)
+    
+
+    
+    
+    gmm = gmms[0]
+    # start_time = time.time()
+    # results = gmm.score_samples(trans_param)
+    # results = gmm_logpdf(trans_param, wts, mus, covs)
+    results = gmm_logpdf_optimized(trans_param, wts, mus, precisions, logdets)
+    # end_time = time.time()
+    # etime = end_time - start_time
+    # print('etime', etime)
+
+#     exit()
+                                  
     log_weights += results
     # print('after')
    
@@ -1060,13 +1358,17 @@ def spectral_siren_log_likelihood_nosky_gmm(gamma1=3, m_min_1=5,m_max_1=80,alpha
     log_weights = log_weights.reshape((nEvents,nsamp))
     ll += jnp.sum(-jnp.log(nsamp) + jnp.nan_to_num(logsumexp(log_weights,axis=-1)))
 
-    end_time = time.time()
-    etime = end_time - start_time
+    # end_time = time.time()
+    # etime = end_time - start_time
     # print('etime', etime)
     return ll, Neff
 
+# lp = LineProfiler()
+# lp_wrapper = lp(spectral_siren_log_likelihood_nosky_gmm)
+# lp_wrapper()
+# lp.print_stats()
 
-
+# exit()
 
 true_param = [2.9, 2.35, 80, 3.5, 0.39, 10, 1.1, 50, 3, 0.4]
 
@@ -1130,49 +1432,46 @@ def likelihood(coord):
 # In[52]:
 
 
-ndims = 10
+ndims = 9
 nlive = 200
 
 # ndims=9
 
 labels = ['gamma1','m_min_1','m_max_1','alpha_1','dm_m_min_1','dm_m_max_1','beta','mu','sigma','f1']
-# labels = ['m_min_1','m_max_1','alpha_1','dm_m_min_1','dm_m_max_1','beta','mu','sigma','f1']
-
-
-def prior_transform(theta):
-    gamma1_,m_min_1_,m_max_1_,alpha_1_,dm_min_1_,dm_max_1_,beta_,mu_,sigma_,f1_ = theta
-
-    gamma1 = gamma1_*(upper_bound[0]-lower_bound[0]) + lower_bound[0]
-    m_min_1 = m_min_1_*(upper_bound[1]-lower_bound[1]) + lower_bound[1]
-    m_max_1 = m_max_1_*(upper_bound[2]-lower_bound[2]) + lower_bound[2]
-    alpha_1 = alpha_1_*(upper_bound[3]-lower_bound[3]) + lower_bound[3]
-    dm_min_1 = dm_min_1_*(upper_bound[4]-lower_bound[4]) + lower_bound[4]
-    dm_max_1 = dm_max_1_*(upper_bound[5]-lower_bound[5]) + lower_bound[5]
-    beta = beta_*(upper_bound[6]-lower_bound[6]) + lower_bound[6]
-    mu = mu_*(upper_bound[7]-lower_bound[7]) + lower_bound[7]
-    sigma = sigma_*(upper_bound[8]-lower_bound[8]) + lower_bound[8]
-    f1 = f1_*(upper_bound[9]-lower_bound[9]) + lower_bound[9]
-
-    return (gamma1,m_min_1,m_max_1,alpha_1,dm_min_1,dm_max_1,beta,mu,sigma,f1)
+labels = ['m_min_1','m_max_1','alpha_1','dm_m_min_1','dm_m_max_1','beta','mu','sigma','f1']
 
 
 # def prior_transform(theta):
-#     m_min_1_,m_max_1_,alpha_1_,dm_min_1_,dm_max_1_,beta_,mu_,sigma_,f1_ = theta
+#     gamma1_,m_min_1_,m_max_1_,alpha_1_,dm_min_1_,dm_max_1_,beta_,mu_,sigma_,f1_ = theta
 
-#     m_min_1 = m_min_1_*(upper_bound[0]-lower_bound[0]) + lower_bound[0]
-#     m_max_1 = m_max_1_*(upper_bound[1]-lower_bound[1]) + lower_bound[1]
-#     alpha_1 = alpha_1_*(upper_bound[2]-lower_bound[2]) + lower_bound[2]
-#     dm_min_1 = dm_min_1_*(upper_bound[3]-lower_bound[3]) + lower_bound[3]
-#     dm_max_1 = dm_max_1_*(upper_bound[4]-lower_bound[4]) + lower_bound[4]
-#     beta = beta_*(upper_bound[5]-lower_bound[5]) + lower_bound[5]
-#     mu = mu_*(upper_bound[6]-lower_bound[6]) + lower_bound[6]
-#     sigma = sigma_*(upper_bound[7]-lower_bound[7]) + lower_bound[7]
-#     f1 = f1_*(upper_bound[8]-lower_bound[8]) + lower_bound[8]
+#     gamma1 = gamma1_*(upper_bound[0]-lower_bound[0]) + lower_bound[0]
+#     m_min_1 = m_min_1_*(upper_bound[1]-lower_bound[1]) + lower_bound[1]
+#     m_max_1 = m_max_1_*(upper_bound[2]-lower_bound[2]) + lower_bound[2]
+#     alpha_1 = alpha_1_*(upper_bound[3]-lower_bound[3]) + lower_bound[3]
+#     dm_min_1 = dm_min_1_*(upper_bound[4]-lower_bound[4]) + lower_bound[4]
+#     dm_max_1 = dm_max_1_*(upper_bound[5]-lower_bound[5]) + lower_bound[5]
+#     beta = beta_*(upper_bound[6]-lower_bound[6]) + lower_bound[6]
+#     mu = mu_*(upper_bound[7]-lower_bound[7]) + lower_bound[7]
+#     sigma = sigma_*(upper_bound[8]-lower_bound[8]) + lower_bound[8]
+#     f1 = f1_*(upper_bound[9]-lower_bound[9]) + lower_bound[9]
 
-#     return (m_min_1,m_max_1,alpha_1,dm_min_1,dm_max_1,beta,mu,sigma,f1)
+#     return (gamma1,m_min_1,m_max_1,alpha_1,dm_min_1,dm_max_1,beta,mu,sigma,f1)
 
 
-# In[63]:
+def prior_transform(theta):
+    m_min_1_,m_max_1_,alpha_1_,dm_min_1_,dm_max_1_,beta_,mu_,sigma_,f1_ = theta
+
+    m_min_1 = m_min_1_*(upper_bound[0]-lower_bound[0]) + lower_bound[0]
+    m_max_1 = m_max_1_*(upper_bound[1]-lower_bound[1]) + lower_bound[1]
+    alpha_1 = alpha_1_*(upper_bound[2]-lower_bound[2]) + lower_bound[2]
+    dm_min_1 = dm_min_1_*(upper_bound[3]-lower_bound[3]) + lower_bound[3]
+    dm_max_1 = dm_max_1_*(upper_bound[4]-lower_bound[4]) + lower_bound[4]
+    beta = beta_*(upper_bound[5]-lower_bound[5]) + lower_bound[5]
+    mu = mu_*(upper_bound[6]-lower_bound[6]) + lower_bound[6]
+    sigma = sigma_*(upper_bound[7]-lower_bound[7]) + lower_bound[7]
+    f1 = f1_*(upper_bound[8]-lower_bound[8]) + lower_bound[8]
+
+    return (m_min_1,m_max_1,alpha_1,dm_min_1,dm_max_1,beta,mu,sigma,f1)
 
 
 from dynesty.utils import resample_equal
@@ -1222,12 +1521,12 @@ print('Number of posterior samples (using dynamic sampler) is {}'.format(dpostsa
 fig = corner.corner(dpostsamples, labels=labels, hist_kwargs={'density': True})
 
 plt.show()
-plt.savefig('./iggy_gwtc3-t.png')
+plt.savefig('./iggy_gwtc3-gmmopt.png')
 
 import pickle
 
 # open a file, where you ant to store the data
-file = open('plbump-GWTC3-t.pkl', 'wb')
+file = open('plbump-GWTC3-norm-ng.pkl', 'wb')
 
 # dump information to that file
 pickle.dump(dres, file)
