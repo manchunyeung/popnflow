@@ -139,7 +139,7 @@ with h5py.File('./GWTC-3_posterior_samples_m1detm2detdLradec_4096_1peryear.h5', 
 
 print(ra.shape)
 
-nEvents=10
+nEvents=1
 
 ra = ra[:4096*nEvents]
 dec = dec[:4096*nEvents]
@@ -198,64 +198,64 @@ m1det = m1det[:4096*nEvents]
 m2det = m2det[:4096*nEvents]
 dL = dL[:4096*nEvents]
 
-with open('../GWTC-3/events_names.txt', 'r') as f:                                                                                                                                                                                                                                                       
-    for line in f:
-        elements = line.strip('\n').split()
-        GWTC3_events[elements[0]] = elements[1]
+# with open('../GWTC-3/events_names.txt', 'r') as f:                                                                                                                                                                                                                                                       
+#     for line in f:
+#         elements = line.strip('\n').split()
+#         GWTC3_events[elements[0]] = elements[1]
 
-parameter_translator_1 = dict(
-    # mass_1="mass_1_source",
-    # mass_2="mass_2_source",
-    m1det = 'mass_1',
-    m2det = 'mass_2',
-    # mass_ratio="mass_ratio",
-    dL="luminosity_distance",
-    # redshift="redshift",
-    ra = 'ra',
-    dec = 'dec'
-)
+# parameter_translator_1 = dict(
+#     # mass_1="mass_1_source",
+#     # mass_2="mass_2_source",
+#     m1det = 'mass_1',
+#     m2det = 'mass_2',
+#     # mass_ratio="mass_ratio",
+#     dL="luminosity_distance",
+#     # redshift="redshift",
+#     ra = 'ra',
+#     dec = 'dec'
+# )
 
-print(ra.shape)
+# print(ra.shape)
 
-e=0 # +10 for things
+# e=0 # +10 for things
 
 
-## Load samples from events
-for event in list(GWTC3_events.keys()):
-    # if e==60:
-    #     break
-    _posterior = pd.DataFrame()
-    waveform = GWTC3_events[event]
-    # if e>=50:
-    # if((ra.shape[0]/4096)!=(e+10)):
-    #     print(e, ra.shape)
-    with h5py.File("../GWTC-3/{}.h5".format(event)) as ff:
-        # for my_key, gwtc_key in parameter_translator_1.items():
-            # _posterior[my_key] = ff[waveform]['posterior_samples'][gwtc_key][:nsamps]
-        m1det = jnp.append(m1det, ff[waveform]['posterior_samples']['mass_1'][:nsamps]) 
-        m2det = jnp.append(m2det, ff[waveform]['posterior_samples']['mass_2'][:nsamps])
-        dL = jnp.append(dL, ff[waveform]['posterior_samples']['luminosity_distance'][:nsamps])
-        ra = jnp.append(ra, ff[waveform]['posterior_samples']['ra'][:nsamps])
-        dec = jnp.append(dec, ff[waveform]['posterior_samples']['dec'][:nsamps])
-    posteriors.append(_posterior)
-    e+=1
-# print(e)
+# ## Load samples from events
+# for event in list(GWTC3_events.keys()):
+#     # if e==60:
+#     #     break
+#     _posterior = pd.DataFrame()
+#     waveform = GWTC3_events[event]
+#     # if e>=50:
+#     # if((ra.shape[0]/4096)!=(e+10)):
+#     #     print(e, ra.shape)
+#     with h5py.File("../GWTC-3/{}.h5".format(event)) as ff:
+#         # for my_key, gwtc_key in parameter_translator_1.items():
+#             # _posterior[my_key] = ff[waveform]['posterior_samples'][gwtc_key][:nsamps]
+#         m1det = jnp.append(m1det, ff[waveform]['posterior_samples']['mass_1'][:nsamps]) 
+#         m2det = jnp.append(m2det, ff[waveform]['posterior_samples']['mass_2'][:nsamps])
+#         dL = jnp.append(dL, ff[waveform]['posterior_samples']['luminosity_distance'][:nsamps])
+#         ra = jnp.append(ra, ff[waveform]['posterior_samples']['ra'][:nsamps])
+#         dec = jnp.append(dec, ff[waveform]['posterior_samples']['dec'][:nsamps])
+#     posteriors.append(_posterior)
+#     e+=1
+# # print(e)
 
-print(ra.shape)
+# print(ra.shape)
 
-nEvents = 69 
+# nEvents = 69 
 nsamp = 4096
-ra = ra.reshape(nEvents,nsamps)[:,0:nsamp]#.flatten()
-dec = dec.reshape(nEvents,nsamps)[:,0:nsamp]#.flatten()
-m1det = m1det.reshape(nEvents,nsamps)[:,0:nsamp]#.flatten()
-m2det = m2det.reshape(nEvents,nsamps)[:,0:nsamp]#.flatten()
-dL = dL.reshape(nEvents,nsamps)[:,0:nsamp]#.flatten()
+# ra = ra.reshape(nEvents,nsamps)[:,0:nsamp]#.flatten()
+# dec = dec.reshape(nEvents,nsamps)[:,0:nsamp]#.flatten()
+# m1det = m1det.reshape(nEvents,nsamps)[:,0:nsamp]#.flatten()
+# m2det = m2det.reshape(nEvents,nsamps)[:,0:nsamp]#.flatten()
+# dL = dL.reshape(nEvents,nsamps)[:,0:nsamp]#.flatten()
 
-ra = ra[0:nEvents].flatten()
-dec = dec[0:nEvents].flatten()
-m1det = m1det[0:nEvents].flatten()
-m2det = m2det[0:nEvents].flatten()
-dL = dL[0:nEvents].flatten()
+# ra = ra[0:nEvents].flatten()
+# dec = dec[0:nEvents].flatten()
+# m1det = m1det[0:nEvents].flatten()
+# m2det = m2det[0:nEvents].flatten()
+# dL = dL[0:nEvents].flatten()
 q = m2det/m1det
 # print(nEvents,nsamp)
 # print(len(posteriors))
@@ -635,7 +635,6 @@ def z_sampling(n_samples, gamma=3.0, key=None):
     indices = jnp.searchsorted(cdf, u)
     return _z_vals[indices]
 
-
 # # Precompute z_vals and CDF once (if gamma is fixed)
 # _z_vals = jnp.linspace(0, Z_MAX, N_GRID)
 # _dV_cache = jnp.zeros_like(_z_vals)  # Cache dV_of_z if possible
@@ -801,10 +800,14 @@ def m1_q_samples(n_samples, m_min_1=5, m_max_1=80, alpha_1=3.3, dm_min_1=1,
 # lp.print_stats()
 
 ## Import KDEs
+
+
+from scipy.stats import gaussian_kde as kde
+
 kdes = []
 import pickle
 for i in range(nEvents):
-    with open(f'./kde_det_pkl/{i}de_1000.pkl', 'rb') as file:
+    with open(f'./kde_det_pkl/{i}de_jax_scipy.pkl', 'rb') as file:
         kde = pickle.load(file)
     kdes.append(kde)
     # kdes.append((jnp.array(kde.dataset.T), kde.covariance_factor()))
@@ -813,12 +816,10 @@ print(len(kdes), 'len_kde')
 seed = np.random.randint(1000)
 key = jax.random.PRNGKey(1000)
 
-def spectral_siren_log_likelihood_nosky(m_min_1=5,m_max_1=80,alpha_1=3.3,dm_min_1=1,dm_max_1=10,beta=1,mu=50,sigma=3,f1=0.4):
+def spectral_siren_log_likelihood_nosky(gamma1=3, m_min_1=5,m_max_1=80,alpha_1=3.3,dm_min_1=1,dm_max_1=10,beta=1,mu=50,sigma=3,f1=0.4):
     zsels = z_of_dL(dLsels, H0Planck,Om0Planck)
     m1sels = m1detsels/(1+zsels)
     m2sels = m2detsels/(1+zsels)
-
-    gamma1 = 3
 
     log_det_weights = log_p_pop_pl_pl(m1sels,m2sels,zsels,m_min_1,m_max_1,alpha_1,dm_min_1,dm_max_1,beta,mu,sigma,f1,gamma1)
 
@@ -837,14 +838,14 @@ def spectral_siren_log_likelihood_nosky(m_min_1=5,m_max_1=80,alpha_1=3.3,dm_min_
     m1 = m1det/(1+z)
     m2 = m2det/(1+z)
 
-    weights = dL**2 / np.sum(dL**2)
-    m1 /= weights
-    m2 /= weights
+    # weights = dL**2 / np.sum(dL**2)
+    # m1 /= weights
+    # m2 /= weights
     
-    # log_weights = log_p_pop_pl_pl(m1,m2,z,m_min_1,m_max_1,alpha_1,dm_min_1,dm_max_1,beta,mu,sigma,f1,gamma1)
-    log_weights = log_p_pop_lvk(m1,m2,z,m_min_1,m_max_1,alpha_1,dm_min_1,dm_max_1,beta,mu,sigma,f1,gamma1)
+    log_weights = log_p_pop_pl_pl(m1,m2,z,m_min_1,m_max_1,alpha_1,dm_min_1,dm_max_1,beta,mu,sigma,f1,gamma1)
+    # log_weights = log_p_pop_lvk(m1,m2,z,m_min_1,m_max_1,alpha_1,dm_min_1,dm_max_1,beta,mu,sigma,f1,gamma1)
     # print('mean', jnp.mean(log_weights))
-    log_weights += - jnp.log(ddL_of_z(z,dL,H0Planck,Om0Planck)) - 2*jnp.log(dL) - 2*jnp.log1p(z) - jnp.log(m1)
+    log_weights += - jnp.log(ddL_of_z(z,dL,H0Planck,Om0Planck)) - 2*jnp.log(dL) - 2*jnp.log1p(z)
 
     nsamp1 = 4096
     log_weights = log_weights.reshape((nEvents,nsamp1))
@@ -947,6 +948,48 @@ def kde_eval(x, dataset, weights, covariance, mask):
     density = jnp.sum(weights * kernel_vals * mask) / jnp.prod(bandwidth)
     return density
 
+
+def evaluate_kdes_fast(kdes, points, batch_size=1000):
+    """
+    Optimized evaluation of multiple KDEs with JAX-compatible operations.
+    
+    Args:
+        kdes: List of KDE objects with JAX-compatible evaluate() methods
+        points: (3, N) array of evaluation points
+        batch_size: Points to process at once
+        
+    Returns:
+        (len(kdes), N) array of densities
+    """
+    # Extract KDE parameters (assuming they're JAX arrays)
+    kde_params = [(kde.dataset, kde.weights, kde.inv_cov) for kde in kdes]
+    
+    # Define JAX-compatible evaluation function
+    @partial(jax.vmap, in_axes=(0, None, None, None))
+    def jax_kde_eval(point, dataset, weights, inv_cov):
+        diff = point[:, None] - dataset  # (3, N)
+        mahalanobis = jnp.einsum('dn,dc,cn->n', diff, inv_cov, diff)
+        return jnp.exp(-0.5 * mahalanobis) @ weights
+    
+    # Process in batches
+    n_kdes = len(kdes)
+    n_points = points.shape[1]
+    results = jnp.zeros((n_kdes, n_points))
+    
+    for i in range(0, n_points, batch_size):
+        batch = points[:, i:i+batch_size]  # (3, B)
+        
+        # Evaluate all KDEs on this batch
+        batch_results = []
+        for dataset, weights, inv_cov in kde_params:
+            res = jax_kde_eval(batch.T, dataset, weights, inv_cov)  # (B,)
+            batch_results.append(res)
+        
+        # Store results
+        results = results.at[:, i:i+batch_size].set(jnp.stack(batch_results))
+    
+    return results
+
 def spectral_siren_log_likelihood_nosky_kde(gamma1 = 3, m_min_1=5,m_max_1=80,alpha_1=3.3,dm_min_1=1,dm_max_1=10,beta=1,mu=50,sigma=3,f1=0.4):
     n_samples=nEvents*nsamp
     # gamma1 = 0 
@@ -988,9 +1031,26 @@ def spectral_siren_log_likelihood_nosky_kde(gamma1 = 3, m_min_1=5,m_max_1=80,alp
     
     # print(f'time1:{etime}')
 
+    # def evaluate_kde_in_batches(kde_func, points, batch_size=12288):
+    #     n = points.shape[0]
+    #     results = []
+
+    #     for i in range(0, n, batch_size):
+    #         batch = points[:, i:i + batch_size]
+    #         batch_result = kde_func.evaluate(batch)
+    #         results.append(batch_result)
+
+    #     # return jnp.concatenate(results, axis=0)
+    #     print(results)
+    #     return results
+
+
 
     def evaluate_kdes(points):
-        return sum(jnp.log(kde(points)) for kde in kdes)
+        # return sum(jnp.log(evaluate_kde_in_batches(kde, points)) for kde in kdes)
+        log_probs = jnp.log(jnp.array([kde.evaluate(points) for kde in kdes]))
+        total_log_prob = jnp.sum(log_probs)
+        return total_log_prob
     
     # def kde_sum(dataset_list, weights_list, covariance_list, mask_list, points):
     #     results = []
@@ -1000,7 +1060,7 @@ def spectral_siren_log_likelihood_nosky_kde(gamma1 = 3, m_min_1=5,m_max_1=80,alp
     #             )
     #         results.append(kde_values)
                 
-    #     return jnp.sum(jnp.stack(results), axis=0)
+    #     return jnp.sum(jnp.log(jnp.stack(results), axis=0))
 
     # def kde_memory_efficient(dataset, weights, covariance, mask, points, point_chunk_size=256):
     #     """
@@ -1031,19 +1091,18 @@ def spectral_siren_log_likelihood_nosky_kde(gamma1 = 3, m_min_1=5,m_max_1=80,alp
 
     #     return total_pdf
 
+    # print(len(kdes)) 
     
-    
-    datasets, weights, dataset_masks, covariances = get_kde_info(kdes)
-    datasets = jnp.stack(datasets)[0]
-    weights = jnp.stack(weights)[0]
-    dataset_masks = jnp.stack(dataset_masks)[0]
-    covariances = jnp.stack(covariances)[0]
-    # print(covariances)
-    # print(datasets.shape, weights.shape, dataset_masks.shape, covariances.shape)
-    # print(points.shape, 'shape')
-    
-    eval_result = jnp.log(kde_eval(datasets, weights, dataset_masks, covariances, points))
-    
+    # datasets, weights, dataset_masks, covariances = get_kde_info(kdes)
+    # datasets = jnp.stack(datasets)[0]
+    # weights = jnp.stack(weights)[0]
+    # dataset_masks = jnp.stack(dataset_masks)[0]
+    # covariances = jnp.stack(covariances)[0]
+    # # print(covariances)
+    # # print(datasets.shape, weights.shape, dataset_masks.shape, covariances.shape)
+    # eval_result = jnp.log(kde_sum(datasets, weights, dataset_masks, covariances, points))
+   
+
     ## Attempt_1 batching over kde parameters - failed due to memory
     # batched_kde_eval = jax.vmap(
     # lambda dataset, weights, covariance, mask: jax.vmap(
@@ -1059,11 +1118,9 @@ def spectral_siren_log_likelihood_nosky_kde(gamma1 = 3, m_min_1=5,m_max_1=80,alp
     
     # start_time = time.time()
     
-    results = evaluate_kdes(points)
+    results = evaluate_kdes_fast(kdes, points)
 
 
-    print(np.allclose(results, eval_result), 'check')
-    exit()
     # end_time = time.time()
     # etime = end_time - start_time
     
@@ -1265,11 +1322,9 @@ def gmm_logpdf_optimized(x_batch, weights, means, precisions, logdets):
     return jax.scipy.special.logsumexp(weighted_log_probs, axis=-1)  # (N,)
 
 # @profile
-def spectral_siren_log_likelihood_nosky_gmm(m_min_1=5,m_max_1=80,alpha_1=3.3,dm_min_1=1,dm_max_1=10,beta=1,mu=50,sigma=3,f1=0.4):
+def spectral_siren_log_likelihood_nosky_gmm(gamma1=3, m_min_1=5,m_max_1=80,alpha_1=3.3,dm_min_1=1,dm_max_1=10,beta=1,mu=50,sigma=3,f1=0.4):
     start_time = time.time()
     n_samples=nEvents*nsamp
-
-    gamma1 = 3
     
     zsels = z_of_dL(dLsels, H0Planck,Om0Planck)
     m1sels = m1detsels/(1+zsels)
@@ -1353,8 +1408,8 @@ def spectral_siren_log_likelihood_nosky_gmm(m_min_1=5,m_max_1=80,alpha_1=3.3,dm_
     # print('after')
    
     dL1 = dL
-    # log_weights += jnp.log(ddL_of_z(z,dL1,H0Planck,Om0Planck)) - 2*jnp.log(dL1) + 2*jnp.log1p(z) - jnp.log(m1)
-    log_weights += jnp.log(ddL_of_z(z,dL1,H0Planck,Om0Planck))+ 2*jnp.log1p(z) - jnp.log(m1)
+    log_weights += -jnp.log(ddL_of_z(z,dL1,H0Planck,Om0Planck)) - 2*jnp.log(dL1) - 2*jnp.log1p(z) + jnp.log(m1)
+    # log_weights += jnp.log(ddL_of_z(z,dL1,H0Planck,Om0Planck))+ 2*jnp.log1p(z) - 2*jnp.log(dL1)
     log_weights = log_weights.reshape((nEvents,nsamp))
     ll += jnp.sum(-jnp.log(nsamp) + jnp.nan_to_num(logsumexp(log_weights,axis=-1)))
 
@@ -1362,6 +1417,7 @@ def spectral_siren_log_likelihood_nosky_gmm(m_min_1=5,m_max_1=80,alpha_1=3.3,dm_
     # etime = end_time - start_time
     # print('etime', etime)
     return ll, Neff
+
 
 # lp = LineProfiler()
 # lp_wrapper = lp(spectral_siren_log_likelihood_nosky_gmm)
@@ -1415,18 +1471,73 @@ upper_bound = np.array([gamma_high,m_min_1_high,m_max_1_high,alpha_1_high,dm_min
 
 # In[57]:
 
+parameters = ["gamma1", "m_min_1", "m_max_1", "alpha_1", "dm_min_1", "dm_max_1", "beta", "mu", "sigma", "f1"]
+
+def plot_param(gamma1=3, m_min_1=5,m_max_1=80,alpha_1=3.3,dm_min_1=1,dm_max_1=10,beta=1,mu=50,sigma=3,f1=0.4):
+    
+    fixed_values = {
+        "gamma1": 3, "m_min_1": 5, "m_max_1": 80, "alpha_1": 3.3,
+        "dm_min_1": 1, "dm_max_1": 10, "beta": 1, "mu": 50, "sigma": 3, "f1": 0.4
+    }
+
+
+    
+
+    for i, param in enumerate(parameters):
+        print(i, param)
+    # Generate the range for the current parameter based on bounds
+        param_range = np.linspace(lower_bound[i], upper_bound[i], 10)
+        
+        # Get fixed values for the other parameters
+        other_params = {k: v for k, v in fixed_values.items() if k != param}
+        
+        # Evaluate the likelihood functions
+        # ll0, n0 = spectral_siren_log_likelihood_nosky(**{param: param_range, **other_params})
+        # print(ll0)
+        ll1, n1 = [], []
+        # ll2, n2 = [], []
+        ll0, n0 = [], []
+        for val in param_range:
+            ll00, n00= spectral_siren_log_likelihood_nosky(**{param: val, **other_params})
+            ll0.append(ll00)
+
+            ll10, n10= spectral_siren_log_likelihood_nosky_gmm(**{param: val, **other_params})
+            ll1.append(ll10)
+            
+            # ll20, n20= spectral_siren_log_likelihood_nosky_kde(**{param: val, **other_params})
+            # ll2.append(ll20)
+        print(ll0) 
+        # Plot the likelihood functions
+        plt.figure(figsize=(8, 6))
+        plt.plot(param_range, ll0, label=f"$L({param}, fixed)$", color="blue")
+        plt.plot(param_range, ll1, label=f"$L_1({param}, fixed)$", color="red", linestyle="--")
+        # plt.plot(param_range, ll2, label=f"$L_2({param}, fixed)$", color="green", linestyle="--")
+        plt.xlabel(param)
+        plt.ylabel("Likelihood")
+        plt.title(f"Comparison of Likelihood Functions (Varying {param})")
+        plt.legend()
+        ll1, n1 = [], []
+        plt.grid()
+        plt.savefig(f'{param}3.png')
+        plt.close()
+
+plot_param()
+exit()
+
 
 def likelihood(coord):
     for i in range(len(coord)):
         if (coord[i]<lower_bound[i] or coord[i]>upper_bound[i]):
             return -np.inf
-    ll, Neff = spectral_siren_log_likelihood_nosky(*coord)
+    ll, Neff = spectral_siren_log_likelihood_nosky_kde(*coord)
     if np.isnan(ll):
         return -np.inf
     if (Neff < 4*nEvents):
         return -np.inf
     else:
         return ll
+
+
 
 
 # In[52]:
