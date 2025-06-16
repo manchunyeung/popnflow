@@ -28,6 +28,12 @@ from jax.scipy.special import logsumexp
 from scipy.interpolate import interp1d
 from tqdm import tqdm
 
+from line_profiler import LineProfiler, profile
+
+from jax.scipy.stats import norm, multivariate_normal
+from functools import partial
+
+
 import matplotlib
 # get_ipython().run_line_magic('matplotlib', 'inline')
 
@@ -192,29 +198,29 @@ m1det = m1det[:4096*nEvents]
 m2det = m2det[:4096*nEvents]
 dL = dL[:4096*nEvents]
 
-with open('../GWTC-3/events_names.txt', 'r') as f:                                                                                                                                                                                                                                                       
-    for line in f:
-        elements = line.strip('\n').split()
-        GWTC3_events[elements[0]] = elements[1]
+# with open('../GWTC-3/events_names.txt', 'r') as f:                                                                                                                                                                                                                                                       
+#     for line in f:
+#         elements = line.strip('\n').split()
+#         GWTC3_events[elements[0]] = elements[1]
 
-parameter_translator_1 = dict(
-    # mass_1="mass_1_source",
-    # mass_2="mass_2_source",
-    m1det = 'mass_1',
-    m2det = 'mass_2',
-    # mass_ratio="mass_ratio",
-    dL="luminosity_distance",
-    # redshift="redshift",
-    ra = 'ra',
-    dec = 'dec'
-)
+# parameter_translator_1 = dict(
+#     # mass_1="mass_1_source",
+#     # mass_2="mass_2_source",
+#     m1det = 'mass_1',
+#     m2det = 'mass_2',
+#     # mass_ratio="mass_ratio",
+#     dL="luminosity_distance",
+#     # redshift="redshift",
+#     ra = 'ra',
+#     dec = 'dec'
+# )
 
-print(ra.shape)
+# print(ra.shape)
 
-e=0 # +10 for things
+# e=0 # +10 for things
 
 
-## Load samples from events
+# ## Load samples from events
 # for event in list(GWTC3_events.keys()):
 #     # if e==60:
 #     #     break
@@ -233,23 +239,23 @@ e=0 # +10 for things
 #         dec = jnp.append(dec, ff[waveform]['posterior_samples']['dec'][:nsamps])
 #     posteriors.append(_posterior)
 #     e+=1
-# print(e)
+# # print(e)
 
-print(ra.shape)
+# print(ra.shape)
 
 # nEvents = 69 
 nsamp = 4096
-ra = ra.reshape(nEvents,nsamps)[:,0:nsamp]#.flatten()
-dec = dec.reshape(nEvents,nsamps)[:,0:nsamp]#.flatten()
-m1det = m1det.reshape(nEvents,nsamps)[:,0:nsamp]#.flatten()
-m2det = m2det.reshape(nEvents,nsamps)[:,0:nsamp]#.flatten()
-dL = dL.reshape(nEvents,nsamps)[:,0:nsamp]#.flatten()
+# ra = ra.reshape(nEvents,nsamps)[:,0:nsamp]#.flatten()
+# dec = dec.reshape(nEvents,nsamps)[:,0:nsamp]#.flatten()
+# m1det = m1det.reshape(nEvents,nsamps)[:,0:nsamp]#.flatten()
+# m2det = m2det.reshape(nEvents,nsamps)[:,0:nsamp]#.flatten()
+# dL = dL.reshape(nEvents,nsamps)[:,0:nsamp]#.flatten()
 
-ra = ra[0:nEvents].flatten()
-dec = dec[0:nEvents].flatten()
-m1det = m1det[0:nEvents].flatten()
-m2det = m2det[0:nEvents].flatten()
-dL = dL[0:nEvents].flatten()
+# ra = ra[0:nEvents].flatten()
+# dec = dec[0:nEvents].flatten()
+# m1det = m1det[0:nEvents].flatten()
+# m2det = m2det[0:nEvents].flatten()
+# dL = dL[0:nEvents].flatten()
 q = m2det/m1det
 # print(nEvents,nsamp)
 # print(len(posteriors))
@@ -405,10 +411,8 @@ def dV_of_z_normed(z,Om0,gamma):
     return jnp.interp(z,zgrid,prob)
 
 
-from jax.scipy.stats import norm
-
 mass = jnp.linspace(1, 250, 2000)
-mass_ratio =  jnp.linspace(0, 1, 2000)
+mass_ratio =  jnp.linspace(1e-5, 1, 2000)
 
 def Sfilter_low(m,m_min,dm_min):
     """
@@ -461,17 +465,25 @@ def logpm1_powerlaw_powerlaw(m1,z,m_min_1,m_max_1,alpha_1,dm_min_1,dm_max_1,mu,s
 
 @jit
 def logpm1_powerlaw_GP(m1,z,mu,sigma):
-  pass
+    pass
 
 @jit
 def logfq(m1,m2,beta):
+    beta=2
     q = m2/m1
     pq = mass_ratio**beta
     pq = pq/jnp.trapezoid(pq,mass_ratio)
+    # jax.debug.print("mr: {}", mass_ratio) 
+    # jax.debug.print("pq: {}",(mass_ratio**beta))
+    # jax.debug.print("trap:{}", jnp.trapezoid(pq, mass_ratio))
+    # jax.debug.print("pqd: {}", pq) 
 
     log_pq = jnp.log(jnp.interp(q,mass_ratio,pq))
 
     return log_pq
+
+# print(jnp.exp(logfq(2,1,  2)))
+# exit()
 
 
 @jit
@@ -480,6 +492,9 @@ def fq(q,beta):
     pq = mass_ratio**beta
     pq = pq/jnp.trapezoid(pq,mass_ratio)
 
+    # jax.debug.print("pq: {}",(mass_ratio**beta).max())
+    # jax.debug.print("trap:{}", jnp.trapezoid(pq, mass_ratio))
+    
     log_pq = jnp.interp(q,mass_ratio,pq)
 
     return log_pq
@@ -584,75 +599,301 @@ def log_p_pop_lvk(m1,m2,z,m_min_1,m_max_1,alpha_1,dm_min_1,dm_max_1,beta,mu,sigm
 from scipy.integrate import cumulative_trapezoid as cumtrapz
 
 ## draw samples from p(z) and p(m1, q)
-def z_sampling(n_samples, gamma=3.0):
-    def pz(z, gamma=3.0):
-        dV = dV_of_z(z,H0Planck,Om0)*(1+z)**(gamma-1)
-        prob = dV/jnp.trapezoid(dV,z)
-        return prob
-
-    z_vals = jnp.linspace(0, 5, 2000)
-    pdf_zvalues = pz(z_vals, gamma)
-    cdf_zvalues = cumtrapz(pdf_zvalues, z_vals, initial=0)  # Numerical CDF
-    cdf_zvalues /= cdf_zvalues[-1]  # Normalize to [0, 1]
-
-    # Interpolate the inverse CDF
-    inverse_cdfz = interp1d(cdf_zvalues, z_vals, bounds_error=False, fill_value=(z_vals[0], z_vals[-1]))
-    u = np.random.uniform(0, 1, n_samples)  # Uniform samples
+# def z_sampling(n_samples, gamma=3.0):
     
-    return inverse_cdfz(u)
+#     @jit
+#     def pz(z, gamma=3.0):
+#         dV = dV_of_z(z,H0Planck,Om0)*(1+z)**(gamma-1)
+#         prob = dV/jnp.trapezoid(dV,z)
+#         return prob
 
-def m1_q_samples(n_samples, m_min_1=5,m_max_1=80,alpha_1=3.3,dm_min_1=1,dm_max_1=10,beta=1,mu=50,sigma=3,f1=0.4):
-    
-    def two_component_primary_mass_ratio(
-        dataset, m_min_1, m_max_1, alpha_1, dm_min_1, dm_max_1, mu, sigma, f1
-    ):
-        r"""
-        Power law model for two-dimensional mass distribution, modelling primary
-        mass and conditional mass ratio distribution.
-    
-        .. math::
-            p(m_1, q) = p(m1) p(q | m_1)
-    
-        """
+#     z_vals = jnp.linspace(0, 5, 2000)
+#     pdf_zvalues = pz(z_vals, gamma)
+#     cdf_zvalues = cumtrapz(pdf_zvalues, z_vals, initial=0)  # Numerical CDF
+#     cdf_zvalues /= cdf_zvalues[-1]  # Normalize to [0, 1]
 
-        p_m1 = pm1_powerlaw_powerlaw(dataset["mass_1"], m_min_1, m_max_1, alpha_1, dm_min_1, dm_max_1, mu, sigma, f1)
-        # p_q = powerlaw(dataset["mass_ratio"], beta, 1, m_min_1/dataset["mass_1"])
+#     # Interpolate the inverse CDF
+#     inverse_cdfz = interp1d(cdf_zvalues, z_vals, bounds_error=False, fill_value=(z_vals[0], z_vals[-1]))
+#     key = jax.random.PRNGKey(42)
+#     u = jax.random.uniform(key, shape=(n_samples,))    
+#     return inverse_cdfz(u)
+
+from jax.scipy.integrate import trapezoid
+
+Z_MAX = 5.0      # Max redshift
+N_GRID = 1000    # Reduced grid size (trade-off: speed vs. accuracy)
+
+_z_vals = jnp.linspace(0, Z_MAX, N_GRID)
+_dV_cache = dV_of_z(_z_vals, H0Planck, Om0)  # Precompute dV/dz
+
+@partial(jit, static_argnames=['n_samples'])
+def z_sampling(n_samples, gamma=3.0, key=None):
+    """Handle dynamic gamma while maximizing performance."""
+    # Compute (1+z)^(gamma-1) term dynamically
+    weight = (1 + _z_vals) ** (gamma - 1)
+    
+    # Compute normalized PDF (vectorized)
+    pdf = _dV_cache * weight
+    pdf /= jnp.trapezoid(pdf, _z_vals)  # Normalization
+    
+    # Compute CDF
+    cdf = jnp.cumsum(pdf) * (_z_vals[1] - _z_vals[0])
+    cdf /= cdf[-1]
+    
+    # Sampling
+    key = jax.random.PRNGKey(42) if key is None else key
+    u = jax.random.uniform(key, (n_samples,))
+    indices = jnp.searchsorted(cdf, u)
+    return _z_vals[indices]
+
+# # Precompute z_vals and CDF once (if gamma is fixed)
+# _z_vals = jnp.linspace(0, Z_MAX, N_GRID)
+# _dV_cache = jnp.zeros_like(_z_vals)  # Cache dV_of_z if possible
+
+# @jit
+# def pz(z, gamma):
+#     dV = dV_of_z(z, H0Planck, Om0) * (1 + z) ** (gamma - 1)
+#     norm = trapezoid(dV, z)  # Faster than manual trapezoid
+#     return dV / norm
+
+# # Precompute CDF for default gamma=3.0 (if known in advance)
+# _pdf_zvalues = pz(_z_vals, 3.0)
+# _cdf_zvalues = jnp.cumsum(_pdf_zvalues) * (_z_vals[1] - _z_vals[0])
+# _cdf_zvalues /= _cdf_zvalues[-1]
+
+# @jit
+# def inverse_cdf(u):
+#     indices = jnp.searchsorted(_cdf_zvalues, u)
+#     return _z_vals[jnp.clip(indices, 0, len(_z_vals) - 1)]
+
+# @timer
+# def z_sampling(n_samples, gamma=3.0, key=None):
+#     key = jax.random.PRNGKey(42) if key is None else key
+#     u = jax.random.uniform(key, shape=(n_samples,))
+#     return inverse_cdf(u)
+
+# @jit
+# @timer
+# def z_sampling(n_samples, gamma=3.0, key=None):
+#     # Assuming dV_of_z is a JAX-compatible function
+#     @jit
+#     def pz(z, gamma=3.0):
+#         dV = dV_of_z(z, H0Planck, Om0) * (1 + z) ** (gamma - 1)
+#         prob = dV / trapezoid(dV, z)
+#         return prob
+
+#     z_vals = jnp.linspace(0, 5, 2000)
+#     pdf_zvalues = pz(z_vals, gamma)
+    
+#     # Compute cumulative integral (CDF)
+#     cdf_zvalues = jnp.cumsum(pdf_zvalues) * (z_vals[1] - z_vals[0])  # Approximate cumulative integral
+#     cdf_zvalues = cdf_zvalues / cdf_zvalues[-1]  # Normalize to [0, 1]
+
+#     # Create inverse CDF function
+#     @jit
+#     def inverse_cdf(u):
+#         # JAX-compatible interpolation
+#         indices = jnp.searchsorted(cdf_zvalues, u)
+#         indices = jnp.clip(indices, 0, len(z_vals) - 1)
+#         return z_vals[indices]
+
+#     if key is None:
+#         key = jax.random.PRNGKey(42)
+#     u = jax.random.uniform(key, shape=(n_samples,))
+    
+#     return inverse_cdf(u)
+
+# @partial(jit, static_argnums=(0,))
+# # @jit
+# def sample_from_pdf(n_samples, m1_range, q_range, p_joint):
+#     cdf = jnp.cumsum(p_joint.ravel())
+#     cdf /= cdf[-1]
+#     uniform_samples = jax.random.uniform(jax.random.PRNGKey(42), (n_samples,))
+#     indices = jnp.searchsorted(cdf, uniform_samples)
+#     q_idx, m1_idx = jnp.unravel_index(indices, p_joint.shape)
+#     return m1_range[m1_idx], q_range[q_idx]
+
+# @profile
+# def m1_q_samples(n_samples, m_min_1=5,m_max_1=80,alpha_1=3.3,dm_min_1=1,dm_max_1=10,beta=1,mu=50,sigma=3,f1=0.4):
+    
+#     @timer
+#     @jit
+#     def two_component_primary_mass_ratio(
+#         dataset, m_min_1, m_max_1, alpha_1, dm_min_1, dm_max_1, mu, sigma, f1
+#     ):
+#         r"""
+#         Power law model for two-dimensional mass distribution, modelling primary
+#         mass and conditional mass ratio distribution.
+    
+#         .. math::
+#             p(m_1, q) = p(m1) p(q | m_1)
+    
+#         """
+
+#         p_m1 = pm1_powerlaw_powerlaw(dataset["mass_1"], m_min_1, m_max_1, alpha_1, dm_min_1, dm_max_1, mu, sigma, f1)
+#         # p_q = powerlaw(dataset["mass_ratio"], beta, 1, m_min_1/dataset["mass_1"])
         
-        p_q = fq(dataset['mass_ratio'], beta)
-        prob = p_m1 * p_q
-        return prob
+#         p_q = fq(dataset['mass_ratio'], beta)
+#         prob = p_m1 * p_q
+#         return prob
 
-    m1_range = np.linspace(m_min_1+0.01, m_max_1, 2000)  # Example range for primary mass
-    q_range = np.linspace(0.01, 1, 2000)  # Example range for mass ratio
+#     m1_range = jnp.linspace(m_min_1+0.01, m_max_1, 2000)  # Example range for primary mass
+#     q_range = jnp.linspace(0.01, 1, 2000)  # Example range for mass ratio
     
-    m1_grid, q_grid = np.meshgrid(m1_range, q_range)
-    dataset = {
-        "mass_1": m1_grid.ravel(),
-        "mass_ratio": q_grid.ravel(),
-    }
+#     m1_grid, q_grid = jnp.meshgrid(m1_range, q_range)
+#     dataset = {
+#         "mass_1": m1_grid.ravel(),
+#         "mass_ratio": q_grid.ravel(),
+#     }
     
-    p_joint = two_component_primary_mass_ratio(dataset, m_min_1, m_max_1, alpha_1, dm_min_1, dm_max_1, mu, sigma, f1).reshape(len(q_range), len(m1_range))
+#     p_joint = two_component_primary_mass_ratio(dataset, m_min_1, m_max_1, alpha_1, dm_min_1, dm_max_1, mu, sigma, f1).reshape(len(q_range), len(m1_range))
     
-    # Step 2: Normalize and compute the CDF
-    p_joint /= np.sum(p_joint)  # Normalize the joint probability
-    cdf = np.cumsum(p_joint.ravel())  # Flatten and compute cumulative sum
-    cdf /= cdf[-1]  # Normalize the CDF to [0, 1]
+#     # Step 2: Normalize and compute the CDF
+#     p_joint /= jnp.sum(p_joint)  # Normalize the joint probability
     
-    # Step 3: Sample from the CDF
-    uniform_samples = np.random.uniform(0, 1, n_samples)
-    sample_indices = np.searchsorted(cdf, uniform_samples)
-    sample_q_indices, sample_m1_indices = np.unravel_index(sample_indices, p_joint.shape)
+#     # return sample_from_pdf(n_samples, m1_range, q_range, p_joint)
+#     cdf = jnp.cumsum(p_joint.ravel())  # Flatten and compute cumulative sum
+#     cdf /= cdf[-1]  # Normalize the CDF to [0, 1]
     
-    sample_m1 = m1_range[sample_m1_indices]
-    sample_q = q_range[sample_q_indices]
+#     # Step 3: Sample from the CDF
+    
+#     key = jax.random.PRNGKey(42)
+#     uniform_samples = jax.random.uniform(key, shape=(n_samples,))
+#     sample_indices = jnp.searchsorted(cdf, uniform_samples)
+#     sample_q_indices, sample_m1_indices = jnp.unravel_index(sample_indices, p_joint.shape)
+    
+#     sample_m1 = m1_range[sample_m1_indices]
+#     sample_q = q_range[sample_q_indices]
 
-    return sample_m1, sample_q
+#     return sample_m1, sample_q
+
+
+GRID_SIZE = 500  # Balance between speed and accuracy
+
+@partial(jit, static_argnums=(0,))  # Make n_samples static
+def m1_q_samples(n_samples, m_min_1=5, m_max_1=80, alpha_1=3.3, dm_min_1=1,
+                dm_max_1=10, beta=1, mu=50, sigma=3, f1=0.4, key=None):
+    """Optimized version that properly handles dynamic n_samples."""
+    
+    # Create grid - these operations are static
+    m1_range = jnp.linspace(m_min_1 + 0.01, m_max_1, GRID_SIZE)
+    q_range = jnp.linspace(0.01, 1, GRID_SIZE)
+    m1_grid, q_grid = jnp.meshgrid(m1_range, q_range, indexing='ij')
+
+    # Compute joint PDF (jitted internally)
+    @jit
+    def compute_pdf(m1, q):
+        p_m1 = pm1_powerlaw_powerlaw(m1, m_min_1, m_max_1, alpha_1, 
+                                    dm_min_1, dm_max_1, mu, sigma, f1)
+        p_q = fq(q, beta)
+        return p_m1 * p_q
+
+    joint_pdf = compute_pdf(m1_grid.ravel(), q_grid.ravel()).reshape(GRID_SIZE, GRID_SIZE)
+    joint_pdf /= jnp.sum(joint_pdf)  # Normalize
+
+    # Compute CDF
+    cdf = jnp.cumsum(joint_pdf.ravel())
+    cdf /= cdf[-1]
+
+    # Sampling - this part handles dynamic n_samples
+    key = jax.random.PRNGKey(42) if key is None else key
+    u = jax.random.uniform(key, shape=(n_samples,))
+    indices = jnp.searchsorted(cdf, u)
+    idx_m1, idx_q = jnp.unravel_index(indices, (GRID_SIZE, GRID_SIZE))
+
+    return m1_range[idx_m1], q_range[idx_q]
+
+
+def metro_mc(nsamp=10000, m_min_1=5, m_max_1=80, alpha_1=3.3, dm_min_1=1,
+                dm_max_1=10, beta=1, mu=50, sigma=3, f1=0.4, key=None):
+    """
+    Simple Metropolis-Hastings sampling of (m1, q) within [m_min, m_max] × [q_min, q_max].
+    - compute_pdf(m1, q) should return non-negative density (unnormalized).
+    """
+    samples = np.zeros((nsamp, 2))
+    p_vals = np.zeros(nsamp)
+    
+    m_min = m_min_1
+    m_max = m_max_1
+    
+    q_min=0.01
+    q_max=1.0
+    
+    proposal_std_m=5.0 
+    proposal_std_q=0.1
+    # Example compute_pdf using some user-defined pm1_peak and fq functions.
+    # These must be defined elsewhere and accept numpy floats (or arrays).
+    def compute_pdf(m1, q):
+        # Check bounds; return zero density outside
+        if (m1 < m_min_1) or (m1 > m_max_1) or (q < q_min) or (q > q_max):
+            return 0.0
+        # User’s functions; ensure they accept/return numpy floats
+        pm1 = pm1_powerlaw_powerlaw(m1, m_min_1, m_max_1, alpha_1, 
+                                    dm_min_1, dm_max_1, mu, sigma, f1)
+        pq = fq(q, beta)               # e.g. power-law in q
+        # If these return arrays, ensure you index appropriately.
+        # Here assume they return scalar floats when inputs are floats.
+        return pm1 * pq
+
+    # Initialize first sample somewhere inside the domain.
+    # Could choose (mu, midpoint of q-range) or draw random uniform:
+    samples[0, 0] = np.clip(mu, m_min, m_max)  # or np.random.uniform(m_min, m_max)
+    samples[0, 1] = np.clip((q_min + q_max) / 2, q_min, q_max)
+    p_vals[0] = compute_pdf(samples[0,0], samples[0,1])
+
+    for i in range(1, nsamp):
+        current_m, current_q = samples[i-1]
+        # Propose new point via Gaussian steps:
+        prop_m = current_m + np.random.normal(scale=proposal_std_m)
+        prop_q = current_q + np.random.normal(scale=proposal_std_q)
+
+        # Boundary check: if out of allowed range, reject immediately
+        if (prop_m < m_min) or (prop_m > m_max) or (prop_q < q_min) or (prop_q > q_max):
+            # reject: keep previous
+            samples[i] = samples[i-1]
+            p_vals[i] = p_vals[i-1]
+            continue
+
+        # Otherwise compute density at proposal
+        p_prop = compute_pdf(prop_m, prop_q)
+        p_curr = p_vals[i-1]
+
+        # If current density is zero (should not happen if initialization in support), you might treat carefully:
+        if p_curr <= 0:
+            # To avoid division by zero, you could automatically accept if p_prop>0,
+            # or simply set accept=False; depends on context. Here, if current has zero density but proposal>0,
+            # you might accept to move into support:
+            accept = (p_prop > 0)
+        else:
+            # Standard Metropolis acceptance:
+            if p_prop >= p_curr:
+                accept = True
+            else:
+                accept = np.random.rand() < (p_prop / p_curr)
+
+        if accept:
+            samples[i, 0] = prop_m
+            samples[i, 1] = prop_q
+            p_vals[i] = p_prop
+        else:
+            samples[i] = samples[i-1]
+            p_vals[i] = p_curr
+
+    return samples, p_vals
+# lp = LineProfiler()
+# lp_wrapper = lp(m1_q_samples)
+# lp_wrapper(10000)
+# lp.print_stats()
 
 ## Import KDEs
+
+
+from scipy.stats import gaussian_kde as kde
+
 kdes = []
 import pickle
 for i in range(nEvents):
-    with open(f'./kde_det_pkl/{i}de_1000.pkl', 'rb') as file:
+    with open(f'./kde_det_pkl/{i}de_jax_scipy.pkl', 'rb') as file:
         kde = pickle.load(file)
     kdes.append(kde)
     # kdes.append((jnp.array(kde.dataset.T), kde.covariance_factor()))
@@ -661,7 +902,6 @@ print(len(kdes), 'len_kde')
 seed = np.random.randint(1000)
 key = jax.random.PRNGKey(1000)
 
-@timer
 def spectral_siren_log_likelihood_nosky(gamma1=3, m_min_1=5,m_max_1=80,alpha_1=3.3,dm_min_1=1,dm_max_1=10,beta=1,mu=50,sigma=3,f1=0.4):
     zsels = z_of_dL(dLsels, H0Planck,Om0Planck)
     m1sels = m1detsels/(1+zsels)
@@ -684,14 +924,14 @@ def spectral_siren_log_likelihood_nosky(gamma1=3, m_min_1=5,m_max_1=80,alpha_1=3
     m1 = m1det/(1+z)
     m2 = m2det/(1+z)
 
-    weights = dL**2 / np.sum(dL**2)
-    m1 /= weights
-    m2 /= weights
+    # weights = dL**2 / np.sum(dL**2)
+    # m1 /= weights
+    # m2 /= weights
     
-    # log_weights = log_p_pop_pl_pl(m1,m2,z,m_min_1,m_max_1,alpha_1,dm_min_1,dm_max_1,beta,mu,sigma,f1,gamma1)
-    log_weights = log_p_pop_lvk(m1,m2,z,m_min_1,m_max_1,alpha_1,dm_min_1,dm_max_1,beta,mu,sigma,f1,gamma1)
+    log_weights = log_p_pop_pl_pl(m1,m2,z,m_min_1,m_max_1,alpha_1,dm_min_1,dm_max_1,beta,mu,sigma,f1,gamma1)
+    # log_weights = log_p_pop_lvk(m1,m2,z,m_min_1,m_max_1,alpha_1,dm_min_1,dm_max_1,beta,mu,sigma,f1,gamma1)
     # print('mean', jnp.mean(log_weights))
-    log_weights += - jnp.log(ddL_of_z(z,dL,H0Planck,Om0Planck)) - 2*jnp.log(dL) - 2*jnp.log1p(z) - jnp.log(m1)
+    log_weights += - jnp.log(ddL_of_z(z,dL,H0Planck,Om0Planck)) - 2*jnp.log(dL) - 2*jnp.log1p(z)
 
     nsamp1 = 4096
     log_weights = log_weights.reshape((nEvents,nsamp1))
@@ -794,7 +1034,48 @@ def kde_eval(x, dataset, weights, covariance, mask):
     density = jnp.sum(weights * kernel_vals * mask) / jnp.prod(bandwidth)
     return density
 
-@timer
+
+def evaluate_kdes_fast(kdes, points, batch_size=1000):
+    """
+    Optimized evaluation of multiple KDEs with JAX-compatible operations.
+    
+    Args:
+        kdes: List of KDE objects with JAX-compatible evaluate() methods
+        points: (3, N) array of evaluation points
+        batch_size: Points to process at once
+        
+    Returns:
+        (len(kdes), N) array of densities
+    """
+    # Extract KDE parameters (assuming they're JAX arrays)
+    kde_params = [(kde.dataset, kde.weights, kde.inv_cov) for kde in kdes]
+    
+    # Define JAX-compatible evaluation function
+    @partial(jax.vmap, in_axes=(0, None, None, None))
+    def jax_kde_eval(point, dataset, weights, inv_cov):
+        diff = point[:, None] - dataset  # (3, N)
+        mahalanobis = jnp.einsum('dn,dc,cn->n', diff, inv_cov, diff)
+        return jnp.exp(-0.5 * mahalanobis) @ weights
+    
+    # Process in batches
+    n_kdes = len(kdes)
+    n_points = points.shape[1]
+    results = jnp.zeros((n_kdes, n_points))
+    
+    for i in range(0, n_points, batch_size):
+        batch = points[:, i:i+batch_size]  # (3, B)
+        
+        # Evaluate all KDEs on this batch
+        batch_results = []
+        for dataset, weights, inv_cov in kde_params:
+            res = jax_kde_eval(batch.T, dataset, weights, inv_cov)  # (B,)
+            batch_results.append(res)
+        
+        # Store results
+        results = results.at[:, i:i+batch_size].set(jnp.stack(batch_results))
+    
+    return results
+
 def spectral_siren_log_likelihood_nosky_kde(gamma1 = 3, m_min_1=5,m_max_1=80,alpha_1=3.3,dm_min_1=1,dm_max_1=10,beta=1,mu=50,sigma=3,f1=0.4):
     n_samples=nEvents*nsamp
     # gamma1 = 0 
@@ -817,7 +1098,6 @@ def spectral_siren_log_likelihood_nosky_kde(gamma1 = 3, m_min_1=5,m_max_1=80,alp
     ll += -nEvents*log_mu + nEvents*(3 + nEvents)/(2*Neff)
 
     # start_time = time.time()
-    
     m1, q = m1_q_samples(n_samples, m_min_1, m_max_1, alpha_1, dm_min_1, dm_max_1, mu, sigma, f1)
     m2 = q * m1
     
@@ -831,13 +1111,26 @@ def spectral_siren_log_likelihood_nosky_kde(gamma1 = 3, m_min_1=5,m_max_1=80,alp
 
     kde_data = []
 
-    # end_time = time.time()
-    # etime = end_time - start_time
-    
-    # print(f'time1:{etime}')
+    # def evaluate_kde_in_batches(kde_func, points, batch_size=12288):
+    #     n = points.shape[0]
+    #     results = []
+
+    #     for i in range(0, n, batch_size):
+    #         batch = points[:, i:i + batch_size]
+    #         batch_result = kde_func.evaluate(batch)
+    #         results.append(batch_result)
+
+    #     # return jnp.concatenate(results, axis=0)
+    #     print(results)
+    #     return results
+
+
 
     def evaluate_kdes(points):
-        return sum(jnp.log(kde(points)) for kde in kdes)
+        # return sum(jnp.log(evaluate_kde_in_batches(kde, points)) for kde in kdes)
+        log_probs = jnp.log(jnp.array([kde.evaluate(points) for kde in kdes]))
+        total_log_prob = jnp.sum(log_probs)
+        return total_log_prob
     
     # def kde_sum(dataset_list, weights_list, covariance_list, mask_list, points):
     #     results = []
@@ -847,7 +1140,7 @@ def spectral_siren_log_likelihood_nosky_kde(gamma1 = 3, m_min_1=5,m_max_1=80,alp
     #             )
     #         results.append(kde_values)
                 
-    #     return jnp.sum(jnp.stack(results), axis=0)
+    #     return jnp.sum(jnp.log(jnp.stack(results), axis=0))
 
     # def kde_memory_efficient(dataset, weights, covariance, mask, points, point_chunk_size=256):
     #     """
@@ -878,16 +1171,17 @@ def spectral_siren_log_likelihood_nosky_kde(gamma1 = 3, m_min_1=5,m_max_1=80,alp
 
     #     return total_pdf
 
-    
+    # print(len(kdes)) 
     
     # datasets, weights, dataset_masks, covariances = get_kde_info(kdes)
     # datasets = jnp.stack(datasets)[0]
     # weights = jnp.stack(weights)[0]
     # dataset_masks = jnp.stack(dataset_masks)[0]
     # covariances = jnp.stack(covariances)[0]
-    # print(covariances)
-    # print(datasets.shape, weights.shape, dataset_masks.shape, covariances.shape)
-    # print(points.shape, 'shape')
+    # # print(covariances)
+    # # print(datasets.shape, weights.shape, dataset_masks.shape, covariances.shape)
+    # eval_result = jnp.log(kde_sum(datasets, weights, dataset_masks, covariances, points))
+   
 
     ## Attempt_1 batching over kde parameters - failed due to memory
     # batched_kde_eval = jax.vmap(
@@ -904,7 +1198,8 @@ def spectral_siren_log_likelihood_nosky_kde(gamma1 = 3, m_min_1=5,m_max_1=80,alp
     
     # start_time = time.time()
     
-    results = evaluate_kdes(points)
+    results = evaluate_kdes_fast(kdes, points)
+
 
     # end_time = time.time()
     # etime = end_time - start_time
@@ -931,7 +1226,6 @@ def spectral_siren_log_likelihood_nosky_kde(gamma1 = 3, m_min_1=5,m_max_1=80,alp
     # print('etime', etime)
     return ll, Neff
 
-from scipy.stats import norm
 # def cdf(samples):
 #     sorted_samples = np.sort(samples)
 #     # The CDF value for each sample is its rank (number of samples <= that value) divided by the total number of samples
@@ -969,48 +1263,145 @@ from scipy.stats import norm
 #     transformed_samples = norm.ppf(U[mask])
 #     return transformed_samples
 
-def cdf(samples):
-    sorted_samples = np.sort(samples)
-    cdf_values = np.arange(1, len(sorted_samples) + 1) / len(sorted_samples)
-    min_val = samples.min()
-    max_val = samples.max()
-    U = np.zeros_like(samples)
+# def cdf(samples):
+#     sorted_samples = np.sort(samples)
+#     cdf_values = np.arange(1, len(sorted_samples) + 1) / len(sorted_samples)
+#     min_val = samples.min()
+#     max_val = samples.max()
+#     U = np.zeros_like(samples)
 
-    # Apply normalization for all values
-    def find_cdf(sample_value):
-        sample_value = np.asarray(sample_value)
-        cdf_result = np.zeros_like(sample_value, dtype=float)
-        for i, value in enumerate(sample_value):
-            index = np.searchsorted(sorted_samples, value)
-            if index == 0:
-                cdf_result[i] = 0.0
-            elif index >= len(cdf_values):
-                cdf_result[i] = 1.0
-            else:
-                cdf_result[i] = cdf_values[index - 1]
-        return cdf_result
+#     # Apply normalization for all values
+#     def find_cdf(sample_value):
+#         sample_value = np.asarray(sample_value)
+#         cdf_result = np.zeros_like(sample_value, dtype=float)
+#         for i, value in enumerate(sample_value):
+#             index = np.searchsorted(sorted_samples, value)
+#             if index == 0:
+#                 cdf_result[i] = 0.0
+#             elif index >= len(cdf_values):
+#                 cdf_result[i] = 1.0
+#             else:
+#                 cdf_result[i] = cdf_values[index - 1]
+#         return cdf_result
 
-    # Calculate U for all values
-    U = find_cdf(samples)
+#     # Calculate U for all values
+#     U = find_cdf(samples)
 
-    # Transform all values using norm.ppf
-    # Add small epsilon to avoid inf values at 0 and 1
-    epsilon = 1e-10
-    U = np.clip(U, epsilon, 1 - epsilon)
-    transformed_samples = norm.ppf(U)
-    return transformed_samples
-
-
+#     # Transform all values using norm.ppf
+#     # Add small epsilon to avoid inf values at 0 and 1
+#     epsilon = 1e-10
+#     U = np.clip(U, epsilon, 1 - epsilon)
+#     transformed_samples = norm.ppf(U)
+#     return transformed_samples
 
 
-with open('./gmm_cdf_pkl/0de.pkl', 'rb') as f:
-    gmm = pickle.load(f)
+
+# @partial(jax.jit, static_argnames=['epsilon'])
+# def cdf(samples, epsilon=1e-10):
+#     # Sort samples and create CDF values (vectorized)
+#     sorted_samples = jnp.sort(samples)
+#     n = len(sorted_samples)
+#     cdf_values = jnp.arange(1, n + 1) / n
+    
+#     # Vectorized search and interpolation
+#     def compute_U(values):
+#         indices = jnp.searchsorted(sorted_samples, values)
+        
+#         # Handle edge cases and lookup in one go
+#         return jnp.where(
+#             indices == 0,
+#             0.0,
+#             jnp.where(
+#                 indices >= n,
+#                 1.0,
+#                 cdf_values[indices - 1]
+#             )
+#         )
+    
+#     # Process all samples at once
+#     U = compute_U(samples)
+    
+#     # Clip and transform (vectorized)
+#     U = jnp.clip(U, epsilon, 1 - epsilon)
+#     return norm.ppf(U)
+
+@jax.jit
+def jax_cdf(samples, epsilon=1e-10):
+    """JAX-optimized CDF computation and normal transform."""
+    # Sort samples and create CDF values
+    sorted_samples = jnp.sort(samples)
+    n = len(sorted_samples)
+    cdf_values = jnp.arange(1, n + 1) / n
+    
+    # Vectorized search and interpolation
+    indices = jnp.searchsorted(sorted_samples, samples)
+    U = jnp.where(
+        indices == 0, 0.0,
+        jnp.where(
+            indices >= n, 1.0,
+            cdf_values[indices - 1]
+        )
+    )
+    
+    # Clip and transform
+    U = jnp.clip(U, epsilon, 1 - epsilon)
+    return norm.ppf(U)
+
+# precomputed_cdf = jax.jit(cdf, static_argnums=(0,)).lower(
+#     jax.ShapeDtypeStruct((10000,), jnp.float32)
+# ).compile()
+
+gmms = []
+for i in range(nEvents):
+    with open(f'./gmm_cdf_pkl/{i}de.pkl', 'rb') as f:
+        gmm = pickle.load(f)
+        gmms.append(gmm)
+        
 
 def in_cdf_transform(samples, trans):
     U = norm.cdf(trans)
     return np.quantile(samples, U)
 
+def get_gmm_info(gmms):
+    weights = [gmm.weights_ for gmm in gmms]
+    means = [gmm.means_ for gmm in gmms]
+    covariances = [gmm.covariances_ for gmm in gmms]
+    return weights, means, covariances
 
+mnorm = multivariate_normal
+
+@jit
+def gmm_logpdf(x, weights, means, covariances):    
+       # Compute log-PDF for each component (K, N)
+    def component_logpdf(mean, cov):
+        return mnorm.logpdf(x, mean=mean, cov=cov)
+    
+    log_component_pdfs = jax.vmap(component_logpdf)(means, covariances)  # shape (K, N)
+    
+    # Weighted sum in log-space (logsumexp trick for numerical stability)
+    weighted_log_pdfs = jnp.log(weights)[:, jnp.newaxis] + log_component_pdfs  # shape (K, N)
+    log_pdf = jax.scipy.special.logsumexp(weighted_log_pdfs, axis=0)  # shape (N,)
+    
+    return log_pdf.squeeze()
+
+@jit
+def gmm_logpdf_optimized(x_batch, weights, means, precisions, logdets):
+    """
+    x_batch: (N, 3) - Input points to evaluate
+    Returns: (N,) log probabilities
+    """
+    # Compute quadratic forms: (x - μ)^T Σ^{-1} (x - μ) for all K components
+    diffs = x_batch[:, None, :] - means[None, :, :]  # (N, K, 3)
+    quad_forms = jnp.einsum('nki,kij,nkj->nk', diffs, precisions, diffs)  # (N, K)
+    
+    # Compute log probabilities for all components
+    log_probs = -0.5 * (3 * jnp.log(2 * jnp.pi) + logdets + quad_forms)  # (N, K)
+    
+    # Weighted sum (logsumexp for stability)
+    weighted_log_probs = jnp.log(weights)[None, :] + log_probs  # (N, K)
+    return jax.scipy.special.logsumexp(weighted_log_probs, axis=-1)  # (N,)
+
+# @profile
 def spectral_siren_log_likelihood_nosky_gmm(gamma1=3, m_min_1=5,m_max_1=80,alpha_1=3.3,dm_min_1=1,dm_max_1=10,beta=1,mu=50,sigma=3,f1=0.4):
     start_time = time.time()
     n_samples=nEvents*nsamp
@@ -1032,41 +1423,91 @@ def spectral_siren_log_likelihood_nosky_gmm(gamma1=3, m_min_1=5,m_max_1=80,alpha
     ll = jnp.where((Neff <= 4 * nEvents), ll, 0)
     ll += -nEvents*log_mu + nEvents*(3 + nEvents)/(2*Neff)
 
+    # start_time = time.time()
+
+    print(m_min_1, m_max_1, alpha_1, dm_min_1, dm_max_1, mu, sigma, f1)
+
     m1, q = m1_q_samples(n_samples, m_min_1, m_max_1, alpha_1, dm_min_1, dm_max_1, mu, sigma, f1)
     m2 = q * m1
     
+    samples, p_vals = metro_mc(n_samples, m_min_1, m_max_1, alpha_1, dm_min_1, dm_max_1, mu, sigma, f1)
+    
+    # samples = np.array([m1, q])
+    np.savetxt('model_samples.txt', samples)
+    exit()
+
     z = z_sampling(n_samples, gamma1)
     dL = dL_of_z(z, H0=H0Planck)
+    
+    # end_time = time.time()
+    # etime = end_time - start_time
+    # print('etime', etime)
+    
+    # 0.02 for above
     
     m1det = m1*(1+z)
     m2det = m2*(1+z)
     points = jnp.vstack([m1det, m2det, dL])
 
-    trans_m1 = cdf(m1det)
-    trans_m2 = cdf(m2det)
-    trans_dL = cdf(dL)
+    trans_m1 = jax_cdf(m1det)
+    trans_m2 = jax_cdf(m2det)
+    trans_dL = jax_cdf(dL)
 
 
-    trans_param = np.column_stack((trans_m1, trans_m2, trans_dL))
-    log_weights = np.zeros(trans_m1.shape[0])
-    results = gmm.score_samples(trans_param)
+    trans_param = jnp.column_stack((trans_m1, trans_m2, trans_dL))
+    log_weights = jnp.zeros(trans_m1.shape[0])
+    
 
+    
+    wts, mus, covs = get_gmm_info(gmms)
+    wts = wts[0]
+    mus= mus[0]
+    covs = covs[0]
+    
+    wts = jnp.asarray(wts, dtype=jnp.float32)
+    mus = jnp.asarray(mus, dtype=jnp.float32)
+    covs = jnp.asarray(covs, dtype=jnp.float32)
+    
+    eps = 1e-6
+    covs = covs + eps * jnp.eye(3, dtype=jnp.float32)[None, ...]
+    precisions = jnp.linalg.inv(covs)  # (K, 3, 3)
+    logdets = jnp.log(jnp.linalg.det(covs))
+    
+    
+                                     
+    trans_param = jnp.asarray(trans_param, dtype=jnp.float32)
+    
+    # start_time = time.time()
+    # results = gmm.score_samples(trans_param)
+    # results = gmm_logpdf(trans_param, wts, mus, covs)
+    results = gmm_logpdf_optimized(trans_param, wts, mus, precisions, logdets)
+    # end_time = time.time()
+    # etime = end_time - start_time
+    # print('etime', etime)
+
+#     exit()
+                                  
     log_weights += results
     # print('after')
    
     dL1 = dL
-    # log_weights += jnp.log(ddL_of_z(z,dL1,H0Planck,Om0Planck)) - 2*jnp.log(dL1) + 2*jnp.log1p(z) - jnp.log(m1)
-    log_weights += jnp.log(ddL_of_z(z,dL1,H0Planck,Om0Planck))+ 2*jnp.log1p(z) - jnp.log(m1)
+    log_weights += -jnp.log(ddL_of_z(z,dL1,H0Planck,Om0Planck)) - 2*jnp.log(dL1) - 2*jnp.log1p(z) + jnp.log(m1)
+    # log_weights += jnp.log(ddL_of_z(z,dL1,H0Planck,Om0Planck))+ 2*jnp.log1p(z) - 2*jnp.log(dL1)
     log_weights = log_weights.reshape((nEvents,nsamp))
     ll += jnp.sum(-jnp.log(nsamp) + jnp.nan_to_num(logsumexp(log_weights,axis=-1)))
 
-    end_time = time.time()
-    etime = end_time - start_time
+    # end_time = time.time()
+    # etime = end_time - start_time
     # print('etime', etime)
     return ll, Neff
 
 
+# lp = LineProfiler()
+# lp_wrapper = lp(spectral_siren_log_likelihood_nosky_gmm)
+# lp_wrapper()
+# lp.print_stats()
 
+# exit()
 
 true_param = [2.9, 2.35, 80, 3.5, 0.39, 10, 1.1, 50, 3, 0.4]
 
@@ -1113,12 +1554,63 @@ upper_bound = np.array([gamma_high,m_min_1_high,m_max_1_high,alpha_1_high,dm_min
 
 # In[57]:
 
+parameters = ["gamma1", "m_min_1", "m_max_1", "alpha_1", "dm_min_1", "dm_max_1", "beta", "mu", "sigma", "f1"]
+
+def plot_param(gamma1=3, m_min_1=5,m_max_1=80,alpha_1=3.3,dm_min_1=1,dm_max_1=10,beta=1,mu=50,sigma=3,f1=0.4):
+    
+    fixed_values = {
+        "gamma1": 3, "m_min_1": 5, "m_max_1": 80, "alpha_1": 3.3,
+        "dm_min_1": 1, "dm_max_1": 10, "beta": 1, "mu": 50, "sigma": 3, "f1": 0.4
+    }
+
+
+    
+
+    for i, param in enumerate(parameters):
+        print(i, param)
+    # Generate the range for the current parameter based on bounds
+        param_range = np.linspace(lower_bound[i], upper_bound[i], 10)
+        
+        # Get fixed values for the other parameters
+        other_params = {k: v for k, v in fixed_values.items() if k != param}
+        
+        # Evaluate the likelihood functions
+        # ll0, n0 = spectral_siren_log_likelihood_nosky(**{param: param_range, **other_params})
+        # print(ll0)
+        ll1, n1 = [], []
+        # ll2, n2 = [], []
+        ll0, n0 = [], []
+        for val in param_range:
+            ll00, n00= spectral_siren_log_likelihood_nosky(**{param: val, **other_params})
+            ll0.append(ll00)
+            ll10, n10= spectral_siren_log_likelihood_nosky_gmm(**{param: val, **other_params})
+            ll1.append(ll10)
+            # ll20, n20= spectral_siren_log_likelihood_nosky_kde(**{param: val, **other_params})
+            # ll2.append(ll20)
+        print(ll0) 
+        # Plot the likelihood functions
+        plt.figure(figsize=(8, 6))
+        plt.plot(param_range, ll0, label=f"$L({param}, fixed)$", color="blue")
+        plt.plot(param_range, ll1, label=f"$L_1({param}, fixed)$", color="red", linestyle="--")
+        # plt.plot(param_range, ll2, label=f"$L_2({param}, fixed)$", color="green", linestyle="--")
+        plt.xlabel(param)
+        plt.ylabel("Likelihood")
+        plt.title(f"Comparison of Likelihood Functions (Varying {param})")
+        plt.legend()
+        ll1, n1 = [], []
+        plt.grid()
+        plt.savefig(f'{param}4.png')
+        plt.close()
+
+plot_param()
+exit()
+
 
 def likelihood(coord):
     for i in range(len(coord)):
         if (coord[i]<lower_bound[i] or coord[i]>upper_bound[i]):
             return -np.inf
-    ll, Neff = spectral_siren_log_likelihood_nosky(*coord)
+    ll, Neff = spectral_siren_log_likelihood_nosky_kde(*coord)
     if np.isnan(ll):
         return -np.inf
     if (Neff < 4*nEvents):
@@ -1127,52 +1619,51 @@ def likelihood(coord):
         return ll
 
 
+
+
 # In[52]:
 
 
-ndims = 10
+ndims = 9
 nlive = 200
 
 # ndims=9
 
 labels = ['gamma1','m_min_1','m_max_1','alpha_1','dm_m_min_1','dm_m_max_1','beta','mu','sigma','f1']
-# labels = ['m_min_1','m_max_1','alpha_1','dm_m_min_1','dm_m_max_1','beta','mu','sigma','f1']
-
-
-def prior_transform(theta):
-    gamma1_,m_min_1_,m_max_1_,alpha_1_,dm_min_1_,dm_max_1_,beta_,mu_,sigma_,f1_ = theta
-
-    gamma1 = gamma1_*(upper_bound[0]-lower_bound[0]) + lower_bound[0]
-    m_min_1 = m_min_1_*(upper_bound[1]-lower_bound[1]) + lower_bound[1]
-    m_max_1 = m_max_1_*(upper_bound[2]-lower_bound[2]) + lower_bound[2]
-    alpha_1 = alpha_1_*(upper_bound[3]-lower_bound[3]) + lower_bound[3]
-    dm_min_1 = dm_min_1_*(upper_bound[4]-lower_bound[4]) + lower_bound[4]
-    dm_max_1 = dm_max_1_*(upper_bound[5]-lower_bound[5]) + lower_bound[5]
-    beta = beta_*(upper_bound[6]-lower_bound[6]) + lower_bound[6]
-    mu = mu_*(upper_bound[7]-lower_bound[7]) + lower_bound[7]
-    sigma = sigma_*(upper_bound[8]-lower_bound[8]) + lower_bound[8]
-    f1 = f1_*(upper_bound[9]-lower_bound[9]) + lower_bound[9]
-
-    return (gamma1,m_min_1,m_max_1,alpha_1,dm_min_1,dm_max_1,beta,mu,sigma,f1)
+labels = ['m_min_1','m_max_1','alpha_1','dm_m_min_1','dm_m_max_1','beta','mu','sigma','f1']
 
 
 # def prior_transform(theta):
-#     m_min_1_,m_max_1_,alpha_1_,dm_min_1_,dm_max_1_,beta_,mu_,sigma_,f1_ = theta
+#     gamma1_,m_min_1_,m_max_1_,alpha_1_,dm_min_1_,dm_max_1_,beta_,mu_,sigma_,f1_ = theta
 
-#     m_min_1 = m_min_1_*(upper_bound[0]-lower_bound[0]) + lower_bound[0]
-#     m_max_1 = m_max_1_*(upper_bound[1]-lower_bound[1]) + lower_bound[1]
-#     alpha_1 = alpha_1_*(upper_bound[2]-lower_bound[2]) + lower_bound[2]
-#     dm_min_1 = dm_min_1_*(upper_bound[3]-lower_bound[3]) + lower_bound[3]
-#     dm_max_1 = dm_max_1_*(upper_bound[4]-lower_bound[4]) + lower_bound[4]
-#     beta = beta_*(upper_bound[5]-lower_bound[5]) + lower_bound[5]
-#     mu = mu_*(upper_bound[6]-lower_bound[6]) + lower_bound[6]
-#     sigma = sigma_*(upper_bound[7]-lower_bound[7]) + lower_bound[7]
-#     f1 = f1_*(upper_bound[8]-lower_bound[8]) + lower_bound[8]
+#     gamma1 = gamma1_*(upper_bound[0]-lower_bound[0]) + lower_bound[0]
+#     m_min_1 = m_min_1_*(upper_bound[1]-lower_bound[1]) + lower_bound[1]
+#     m_max_1 = m_max_1_*(upper_bound[2]-lower_bound[2]) + lower_bound[2]
+#     alpha_1 = alpha_1_*(upper_bound[3]-lower_bound[3]) + lower_bound[3]
+#     dm_min_1 = dm_min_1_*(upper_bound[4]-lower_bound[4]) + lower_bound[4]
+#     dm_max_1 = dm_max_1_*(upper_bound[5]-lower_bound[5]) + lower_bound[5]
+#     beta = beta_*(upper_bound[6]-lower_bound[6]) + lower_bound[6]
+#     mu = mu_*(upper_bound[7]-lower_bound[7]) + lower_bound[7]
+#     sigma = sigma_*(upper_bound[8]-lower_bound[8]) + lower_bound[8]
+#     f1 = f1_*(upper_bound[9]-lower_bound[9]) + lower_bound[9]
 
-#     return (m_min_1,m_max_1,alpha_1,dm_min_1,dm_max_1,beta,mu,sigma,f1)
+#     return (gamma1,m_min_1,m_max_1,alpha_1,dm_min_1,dm_max_1,beta,mu,sigma,f1)
 
 
-# In[63]:
+def prior_transform(theta):
+    m_min_1_,m_max_1_,alpha_1_,dm_min_1_,dm_max_1_,beta_,mu_,sigma_,f1_ = theta
+
+    m_min_1 = m_min_1_*(upper_bound[0]-lower_bound[0]) + lower_bound[0]
+    m_max_1 = m_max_1_*(upper_bound[1]-lower_bound[1]) + lower_bound[1]
+    alpha_1 = alpha_1_*(upper_bound[2]-lower_bound[2]) + lower_bound[2]
+    dm_min_1 = dm_min_1_*(upper_bound[3]-lower_bound[3]) + lower_bound[3]
+    dm_max_1 = dm_max_1_*(upper_bound[4]-lower_bound[4]) + lower_bound[4]
+    beta = beta_*(upper_bound[5]-lower_bound[5]) + lower_bound[5]
+    mu = mu_*(upper_bound[6]-lower_bound[6]) + lower_bound[6]
+    sigma = sigma_*(upper_bound[7]-lower_bound[7]) + lower_bound[7]
+    f1 = f1_*(upper_bound[8]-lower_bound[8]) + lower_bound[8]
+
+    return (m_min_1,m_max_1,alpha_1,dm_min_1,dm_max_1,beta,mu,sigma,f1)
 
 
 from dynesty.utils import resample_equal
@@ -1222,12 +1713,12 @@ print('Number of posterior samples (using dynamic sampler) is {}'.format(dpostsa
 fig = corner.corner(dpostsamples, labels=labels, hist_kwargs={'density': True})
 
 plt.show()
-plt.savefig('./iggy_gwtc3-t.png')
+plt.savefig('./iggy_gwtc3-gmmopt.png')
 
 import pickle
 
 # open a file, where you ant to store the data
-file = open('plbump-GWTC3-t.pkl', 'wb')
+file = open('plbump-GWTC3-norm-ng.pkl', 'wb')
 
 # dump information to that file
 pickle.dump(dres, file)
