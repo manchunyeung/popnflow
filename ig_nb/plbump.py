@@ -412,7 +412,7 @@ def dV_of_z_normed(z,Om0,gamma):
 
 
 mass = jnp.linspace(1, 250, 2000)
-mass_ratio =  jnp.linspace(0, 1, 2000)
+mass_ratio =  jnp.linspace(1e-5, 1, 2000)
 
 def Sfilter_low(m,m_min,dm_min):
     """
@@ -465,17 +465,25 @@ def logpm1_powerlaw_powerlaw(m1,z,m_min_1,m_max_1,alpha_1,dm_min_1,dm_max_1,mu,s
 
 @jit
 def logpm1_powerlaw_GP(m1,z,mu,sigma):
-  pass
+    pass
 
 @jit
 def logfq(m1,m2,beta):
+    beta=2
     q = m2/m1
     pq = mass_ratio**beta
     pq = pq/jnp.trapezoid(pq,mass_ratio)
+    # jax.debug.print("mr: {}", mass_ratio) 
+    # jax.debug.print("pq: {}",(mass_ratio**beta))
+    # jax.debug.print("trap:{}", jnp.trapezoid(pq, mass_ratio))
+    # jax.debug.print("pqd: {}", pq) 
 
     log_pq = jnp.log(jnp.interp(q,mass_ratio,pq))
 
     return log_pq
+
+# print(jnp.exp(logfq(2,1,  2)))
+# exit()
 
 
 @jit
@@ -484,6 +492,9 @@ def fq(q,beta):
     pq = mass_ratio**beta
     pq = pq/jnp.trapezoid(pq,mass_ratio)
 
+    # jax.debug.print("pq: {}",(mass_ratio**beta).max())
+    # jax.debug.print("trap:{}", jnp.trapezoid(pq, mass_ratio))
+    
     log_pq = jnp.interp(q,mass_ratio,pq)
 
     return log_pq
@@ -793,7 +804,82 @@ def m1_q_samples(n_samples, m_min_1=5, m_max_1=80, alpha_1=3.3, dm_min_1=1,
     return m1_range[idx_m1], q_range[idx_q]
 
 
+def metro_mc(nsamp=10000, m_min_1=5, m_max_1=80, alpha_1=3.3, dm_min_1=1,
+                dm_max_1=10, beta=1, mu=50, sigma=3, f1=0.4, key=None):
+    """
+    Simple Metropolis-Hastings sampling of (m1, q) within [m_min, m_max] × [q_min, q_max].
+    - compute_pdf(m1, q) should return non-negative density (unnormalized).
+    """
+    samples = np.zeros((nsamp, 2))
+    p_vals = np.zeros(nsamp)
+    
+    m_min = m_min_1
+    m_max = m_max_1
+    
+    q_min=0.01
+    q_max=1.0
+    
+    proposal_std_m=5.0 
+    proposal_std_q=0.1
+    # Example compute_pdf using some user-defined pm1_peak and fq functions.
+    # These must be defined elsewhere and accept numpy floats (or arrays).
+    def compute_pdf(m1, q):
+        # Check bounds; return zero density outside
+        if (m1 < m_min_1) or (m1 > m_max_1) or (q < q_min) or (q > q_max):
+            return 0.0
+        # User’s functions; ensure they accept/return numpy floats
+        pm1 = pm1_powerlaw_powerlaw(m1, m_min_1, m_max_1, alpha_1, 
+                                    dm_min_1, dm_max_1, mu, sigma, f1)
+        pq = fq(q, beta)               # e.g. power-law in q
+        # If these return arrays, ensure you index appropriately.
+        # Here assume they return scalar floats when inputs are floats.
+        return pm1 * pq
 
+    # Initialize first sample somewhere inside the domain.
+    # Could choose (mu, midpoint of q-range) or draw random uniform:
+    samples[0, 0] = np.clip(mu, m_min, m_max)  # or np.random.uniform(m_min, m_max)
+    samples[0, 1] = np.clip((q_min + q_max) / 2, q_min, q_max)
+    p_vals[0] = compute_pdf(samples[0,0], samples[0,1])
+
+    for i in range(1, nsamp):
+        current_m, current_q = samples[i-1]
+        # Propose new point via Gaussian steps:
+        prop_m = current_m + np.random.normal(scale=proposal_std_m)
+        prop_q = current_q + np.random.normal(scale=proposal_std_q)
+
+        # Boundary check: if out of allowed range, reject immediately
+        if (prop_m < m_min) or (prop_m > m_max) or (prop_q < q_min) or (prop_q > q_max):
+            # reject: keep previous
+            samples[i] = samples[i-1]
+            p_vals[i] = p_vals[i-1]
+            continue
+
+        # Otherwise compute density at proposal
+        p_prop = compute_pdf(prop_m, prop_q)
+        p_curr = p_vals[i-1]
+
+        # If current density is zero (should not happen if initialization in support), you might treat carefully:
+        if p_curr <= 0:
+            # To avoid division by zero, you could automatically accept if p_prop>0,
+            # or simply set accept=False; depends on context. Here, if current has zero density but proposal>0,
+            # you might accept to move into support:
+            accept = (p_prop > 0)
+        else:
+            # Standard Metropolis acceptance:
+            if p_prop >= p_curr:
+                accept = True
+            else:
+                accept = np.random.rand() < (p_prop / p_curr)
+
+        if accept:
+            samples[i, 0] = prop_m
+            samples[i, 1] = prop_q
+            p_vals[i] = p_prop
+        else:
+            samples[i] = samples[i-1]
+            p_vals[i] = p_curr
+
+    return samples, p_vals
 # lp = LineProfiler()
 # lp_wrapper = lp(m1_q_samples)
 # lp_wrapper(10000)
@@ -1012,7 +1098,6 @@ def spectral_siren_log_likelihood_nosky_kde(gamma1 = 3, m_min_1=5,m_max_1=80,alp
     ll += -nEvents*log_mu + nEvents*(3 + nEvents)/(2*Neff)
 
     # start_time = time.time()
-    
     m1, q = m1_q_samples(n_samples, m_min_1, m_max_1, alpha_1, dm_min_1, dm_max_1, mu, sigma, f1)
     m2 = q * m1
     
@@ -1025,11 +1110,6 @@ def spectral_siren_log_likelihood_nosky_kde(gamma1 = 3, m_min_1=5,m_max_1=80,alp
     log_weights = np.zeros(m1det.shape[0])
 
     kde_data = []
-
-    # end_time = time.time()
-    # etime = end_time - start_time
-    
-    # print(f'time1:{etime}')
 
     # def evaluate_kde_in_batches(kde_func, points, batch_size=12288):
     #     n = points.shape[0]
@@ -1345,9 +1425,16 @@ def spectral_siren_log_likelihood_nosky_gmm(gamma1=3, m_min_1=5,m_max_1=80,alpha
 
     # start_time = time.time()
 
-    
+    print(m_min_1, m_max_1, alpha_1, dm_min_1, dm_max_1, mu, sigma, f1)
+
     m1, q = m1_q_samples(n_samples, m_min_1, m_max_1, alpha_1, dm_min_1, dm_max_1, mu, sigma, f1)
     m2 = q * m1
+    
+    samples, p_vals = metro_mc(n_samples, m_min_1, m_max_1, alpha_1, dm_min_1, dm_max_1, mu, sigma, f1)
+    
+    # samples = np.array([m1, q])
+    np.savetxt('model_samples.txt', samples)
+    exit()
 
     z = z_sampling(n_samples, gamma1)
     dL = dL_of_z(z, H0=H0Planck)
@@ -1390,10 +1477,6 @@ def spectral_siren_log_likelihood_nosky_gmm(gamma1=3, m_min_1=5,m_max_1=80,alpha
                                      
     trans_param = jnp.asarray(trans_param, dtype=jnp.float32)
     
-
-    
-    
-    gmm = gmms[0]
     # start_time = time.time()
     # results = gmm.score_samples(trans_param)
     # results = gmm_logpdf(trans_param, wts, mus, covs)
@@ -1500,10 +1583,8 @@ def plot_param(gamma1=3, m_min_1=5,m_max_1=80,alpha_1=3.3,dm_min_1=1,dm_max_1=10
         for val in param_range:
             ll00, n00= spectral_siren_log_likelihood_nosky(**{param: val, **other_params})
             ll0.append(ll00)
-
             ll10, n10= spectral_siren_log_likelihood_nosky_gmm(**{param: val, **other_params})
             ll1.append(ll10)
-            
             # ll20, n20= spectral_siren_log_likelihood_nosky_kde(**{param: val, **other_params})
             # ll2.append(ll20)
         print(ll0) 
@@ -1518,7 +1599,7 @@ def plot_param(gamma1=3, m_min_1=5,m_max_1=80,alpha_1=3.3,dm_min_1=1,dm_max_1=10
         plt.legend()
         ll1, n1 = [], []
         plt.grid()
-        plt.savefig(f'{param}3.png')
+        plt.savefig(f'{param}4.png')
         plt.close()
 
 plot_param()
