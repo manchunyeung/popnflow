@@ -1,0 +1,16 @@
+=== Starting GW pipeline ===
+Traceback (most recent call last):
+  File "/home/manchun.yeung/population/simon/popnflow/production/make_plots.py", line 59, in <module>
+    import seaborn as sns
+  File "/home/manchun.yeung/.conda/envs/pop/lib/python3.12/site-packages/seaborn/__init__.py", line 5, in <module>
+    from .relational import *  # noqa: F401,F403
+    ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/manchun.yeung/.conda/envs/pop/lib/python3.12/site-packages/seaborn/relational.py", line 22, in <module>
+    from .axisgrid import FacetGrid, _facet_docs
+  File "<frozen importlib._bootstrap>", line 1360, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1331, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 935, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 990, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 1086, in get_code
+  File "<frozen importlib._bootstrap_external>", line 1186, in get_data
+KeyboardInterrupt

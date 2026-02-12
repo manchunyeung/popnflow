@@ -628,6 +628,8 @@ print('Number of posterior samples (using dynamic sampler) is {}'.format(dpostsa
 fig = corner.corner(dpostsamples,  hist_kwargs={'density': True},labels=labels, color=CB['green'],truths=[mu,sigma,muz,sigmaz], fig=fig)
 # plt.show()
 
+import matplotlib.lines as mlines
+
 handles = [
     mlines.Line2D([], [], color=CB["blue"],   lw=2, label="Method 1"),
     mlines.Line2D([], [], color=CB["orange"], lw=2, label="Method 2"),

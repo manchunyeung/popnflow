@@ -20,7 +20,7 @@ LOG_DIR="${BASE_RUN_DIR}/logs"
 
 # ---- environment ----
 # source ~/miniconda3/etc/profile.d/conda.sh
-conda activate pop
+# conda activate pop
 
 export XLA_PYTHON_CLIENT_PREALLOCATE=false
 export JAX_ENABLE_X64=true
@@ -35,10 +35,10 @@ exec 2>&1
 echo "=== Starting GW pipeline ==="
 
 # ---- 1. sanity test ----
-python sanity_test_methods.py --outdir "${FIG_DIR}" --tag "sanity"
+# python sanity_test_methods.py --outdir "${FIG_DIR}" --tag "sanity"
 
 # ---- 2. GWTC-3 inference ----
-python run_gwtc3_inference.py --catalog "${CATALOG}" --indir "${INPUT_DIR}" --outdir "${DATA_DIR}/inference" --nsamp-pop 200000 --seed "${SEED}"
+# python run_gwtc3_inference.py --catalog "${CATALOG}" --indir "${INPUT_DIR}" --outdir "${DATA_DIR}/inference" --nsamp-pop 200000 --seed "${SEED}"
 
 # ---- 3. plotting ----
 python make_plots.py   --indir "${DATA_DIR}/inference"   --outdir "${FIG_DIR}"

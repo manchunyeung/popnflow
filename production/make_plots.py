@@ -416,7 +416,7 @@ def pm1_from_lambda(lam):
     pm1 = jnp.exp(log_pm1)
     return pm1
 
-lambda_samples = jnp.asarray(dpostsamples[::5, 1:], dtype=jnp.float64)
+lambda_samples = jnp.asarray(dpostsamples[::10, 1:], dtype=jnp.float64)
 
 pm1_all = jax.jit(vmap(pm1_from_lambda))(lambda_samples)
 # shape: (Nposterior, Nm)
