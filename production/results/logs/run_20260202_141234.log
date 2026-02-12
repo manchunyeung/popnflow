@@ -1,3 +1,0 @@
-=== Starting GW pipeline ===
-2026-02-02 14:14:35.968675: F external/tsl/tsl/platform/default/env.cc:74] Check failed: ret == 0 (11 vs. 0)Thread tf_XLAEigen creation via pthread_create() failed.
-run_all.sh: line 38: 1090094 Aborted                 (core dumped) python sanity_test_methods.py --outdir "${FIG_DIR}" --tag "sanity"

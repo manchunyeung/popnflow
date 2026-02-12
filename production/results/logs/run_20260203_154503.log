@@ -1,34 +1,0 @@
-=== Starting GW pipeline ===
-indir input_data
-  0%|          | 0/1000 [00:00<?, ?it/s]  0%|          | 1/1000 [00:01<20:52,  1.25s/it]  1%|          | 11/1000 [00:01<01:31, 10.84it/s]  2%|▏         | 21/1000 [00:01<00:44, 21.97it/s]  3%|▎         | 31/1000 [00:01<00:28, 33.57it/s]  4%|▍         | 41/1000 [00:01<00:21, 44.88it/s]  5%|▌         | 51/1000 [00:01<00:17, 55.29it/s]  6%|▌         | 61/1000 [00:01<00:14, 64.60it/s]  7%|▋         | 71/1000 [00:01<00:12, 72.40it/s]  8%|▊         | 81/1000 [00:02<00:11, 78.80it/s]  9%|▉         | 91/1000 [00:02<00:10, 83.89it/s] 10%|█         | 101/1000 [00:02<00:10, 87.37it/s] 11%|█         | 111/1000 [00:02<00:09, 90.64it/s] 12%|█▏        | 121/1000 [00:02<00:09, 93.24it/s] 13%|█▎        | 132/1000 [00:02<00:09, 95.44it/s] 14%|█▍        | 142/1000 [00:02<00:08, 96.51it/s] 15%|█▌        | 153/1000 [00:02<00:08, 97.83it/s] 16%|█▋        | 164/1000 [00:02<00:08, 98.92it/s] 18%|█▊        | 175/1000 [00:03<00:08, 99.60it/s] 19%|█▊        | 186/1000 [00:03<00:08, 100.32it/s] 20%|█▉        | 197/1000 [00:03<00:07, 100.73it/s] 21%|██        | 208/1000 [00:03<00:07, 100.91it/s] 22%|██▏       | 219/1000 [00:03<00:07, 101.50it/s] 23%|██▎       | 230/1000 [00:03<00:07, 102.01it/s] 24%|██▍       | 241/1000 [00:03<00:07, 101.95it/s] 25%|██▌       | 252/1000 [00:03<00:07, 102.13it/s] 26%|██▋       | 263/1000 [00:03<00:07, 102.56it/s] 27%|██▋       | 274/1000 [00:04<00:07, 102.47it/s] 28%|██▊       | 285/1000 [00:04<00:06, 102.59it/s] 30%|██▉       | 296/1000 [00:04<00:06, 102.55it/s] 31%|███       | 307/1000 [00:04<00:06, 102.11it/s] 32%|███▏      | 318/1000 [00:04<00:06, 102.07it/s] 33%|███▎      | 329/1000 [00:04<00:06, 102.18it/s] 34%|███▍      | 340/1000 [00:04<00:06, 104.10it/s] 35%|███▌      | 352/1000 [00:04<00:06, 107.06it/s] 36%|███▋      | 364/1000 [00:04<00:05, 108.70it/s] 38%|███▊      | 376/1000 [00:04<00:05, 111.54it/s] 39%|███▉      | 389/1000 [00:05<00:05, 114.33it/s] 40%|████      | 402/1000 [00:05<00:05, 116.27it/s] 42%|████▏     | 415/1000 [00:05<00:04, 118.48it/s] 43%|████▎     | 428/1000 [00:05<00:04, 120.63it/s] 44%|████▍     | 441/1000 [00:05<00:04, 122.62it/s] 45%|████▌     | 454/1000 [00:05<00:04, 124.54it/s] 47%|████▋     | 468/1000 [00:05<00:04, 126.46it/s] 48%|████▊     | 482/1000 [00:05<00:04, 127.95it/s] 50%|████▉     | 496/1000 [00:05<00:03, 129.83it/s] 51%|█████     | 510/1000 [00:06<00:03, 132.03it/s] 52%|█████▎    | 525/1000 [00:06<00:03, 135.07it/s] 54%|█████▍    | 540/1000 [00:06<00:03, 137.65it/s] 56%|█████▌    | 555/1000 [00:06<00:03, 139.57it/s] 57%|█████▋    | 570/1000 [00:06<00:03, 141.88it/s] 58%|█████▊    | 585/1000 [00:06<00:02, 143.89it/s] 60%|██████    | 601/1000 [00:06<00:02, 145.48it/s] 62%|██████▏   | 616/1000 [00:06<00:02, 146.64it/s] 63%|██████▎   | 632/1000 [00:06<00:02, 148.36it/s] 65%|██████▍   | 648/1000 [00:06<00:02, 150.13it/s] 66%|██████▋   | 664/1000 [00:07<00:02, 151.80it/s] 68%|██████▊   | 680/1000 [00:07<00:02, 153.25it/s] 70%|██████▉   | 697/1000 [00:07<00:01, 155.50it/s] 71%|███████▏  | 714/1000 [00:07<00:01, 157.43it/s] 73%|███████▎  | 731/1000 [00:07<00:01, 160.39it/s] 75%|███████▍  | 749/1000 [00:07<00:01, 163.55it/s] 77%|███████▋  | 766/1000 [00:07<00:01, 164.79it/s] 78%|███████▊  | 784/1000 [00:07<00:01, 167.86it/s] 80%|████████  | 802/1000 [00:07<00:01, 170.79it/s] 82%|████████▏ | 821/1000 [00:07<00:01, 173.95it/s] 84%|████████▍ | 840/1000 [00:08<00:00, 177.00it/s] 86%|████████▌ | 859/1000 [00:08<00:00, 179.91it/s] 88%|████████▊ | 878/1000 [00:08<00:00, 182.70it/s] 90%|████████▉ | 898/1000 [00:08<00:00, 185.25it/s] 92%|█████████▏| 918/1000 [00:08<00:00, 187.28it/s] 94%|█████████▍| 938/1000 [00:08<00:00, 190.01it/s] 96%|█████████▌| 958/1000 [00:08<00:00, 192.19it/s] 98%|█████████▊| 979/1000 [00:08<00:00, 194.91it/s]100%|██████████| 1000/1000 [00:08<00:00, 112.45it/s]
-2026-02-03 15:59:24.101361: W external/xla/xla/tsl/framework/bfc_allocator.cc:291] Allocator (GPU_0_bfc) ran out of memory trying to allocate 2.17GiB with freed_by_count=0. The caller indicates that this is not a failure, but this may mean that there could be performance gains if more memory were available.
-K_max 7
-5
-Traceback (most recent call last):
-  File "/home/manchun.yeung/population/simon/popnflow/production/run_gwtc3_inference.py", line 813, in <module>
-    cache = prepare_guided_is_cache(
-            ^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/manchun.yeung/population/simon/popnflow/production/run_gwtc3_inference.py", line 793, in prepare_guided_is_cache
-    lq = log_q_ord(x_sorted, q_params)                  # (N,)
-         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/manchun.yeung/population/simon/popnflow/production/run_gwtc3_inference.py", line 771, in log_q_ord
-    return log_gmm_symmetrized(x_sorted, w_q, mu_all, Prec_all, ld_all)  # (N,)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/manchun.yeung/population/simon/popnflow/production/run_gwtc3_inference.py", line 720, in log_gmm_symmetrized
-    log_px      = exact_log_gmm(x_sorted, w_K, mu_KD, Prec_KDD, logdetS_K)
-                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/manchun.yeung/population/simon/popnflow/production/run_gwtc3_inference.py", line 711, in exact_log_gmm
-    logN = _log_gauss_with_precision(x, mu_KD, Prec_KDD, logdetS_K)  # (N,K)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/manchun.yeung/population/simon/popnflow/production/run_gwtc3_inference.py", line 702, in _log_gauss_with_precision
-    quad  = jnp.einsum('nkd,kdj,nkj->nk', diffs, Prec_KDD, diffs)  # (N,K)
-            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/manchun.yeung/.conda/envs/pop/lib/python3.12/site-packages/jax/_src/numpy/lax_numpy.py", line 6377, in einsum
-    return einsum(operands, contractions, precision,
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/manchun.yeung/.conda/envs/pop/lib/python3.12/contextlib.py", line 81, in inner
-    return func(*args, **kwds)
-           ^^^^^^^^^^^^^^^^^^^
-jaxlib.xla_extension.XlaRuntimeError: RESOURCE_EXHAUSTED: Out of memory while trying to allocate 2335177216 bytes.
---------------------
-For simplicity, JAX has removed its internal frames from the traceback of the following exception. Set JAX_TRACEBACK_FILTERING=off to include these.
