@@ -367,6 +367,14 @@ from dynesty.utils import resample_equal
 dweights = np.exp(dres['logwt'] - dres['logz'][-1])
 dpostsamples = resample_equal(dres.samples, dweights)
 
+import corner
+labels = ['gamma', 'm_min_1','m_max_1','alpha_1','dm_min_1','dm_max_1','beta', 'mu','sigma','f1']
+
+fig1 = corner.corner(dpostsamples, labels=labels, hist_kwargs={'density': True})
+plt.close(fig1)
+# fig1.savefig(args.outdir / "corner_met1.pdf", dpi=200)
+# plt.close(fig1)
+
 import jax
 jax.config.update("jax_enable_x64", True)
 
@@ -568,6 +576,10 @@ if _met3 is not None:
 
 # plt.figure(figsize=(6.5, 3.5))
 
+fig2 = corner.corner(d3postsamples, labels=labels, hist_kwargs={'density': True}, color='orange', fig=fig1)
+fig2.savefig(args.outdir / "corner_pos.pdf", dpi=200)
+plt.close(fig2)
+
 plt.fill_between(m1s, p5, p95, alpha=0.3)
 plt.plot(m1s, p50, lw=2, label='standard pop')
 
@@ -588,7 +600,7 @@ plt.yscale("log")
 plt.legend()
 
 plt.tight_layout()
-plt.savefig(args.outdir / "pm1_posteriors.png", dpi=200)
+plt.savefig(args.outdir / "pm1_posteriors.pdf", dpi=200)
 plt.close()
 
 @jit
@@ -669,7 +681,7 @@ plt.yscale("log")
 plt.legend()
 
 plt.tight_layout()
-plt.savefig(args.outdir / "pm2_posteriors.png", dpi=200)
+plt.savefig(args.outdir / "pm2_posteriors.pdf", dpi=200)
 plt.close()
 
 
