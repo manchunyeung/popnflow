@@ -1,0 +1,53 @@
+# HTCondor Submit File
+universe = vanilla
+executable = run_all.sh
+getenv = True
+accounting_group = ligo.prod.o3.cbc.bayesianpopulations.parametric 
+
+# Resource requests (Adjust based on your cluster limits)
+request_cpus = 1
+request_memory = 12GB
+request_disk = 2GB
+# request_gpus = 1  # Uncomment if you need GPUs
+
+# Standard logs
+log    = logs/job_$(model)_$(seed).log
+output = logs/job_$(model)_$(seed).out
+error  = logs/job_$(model)_$(seed).err
+
+# Argument structure matches wrapper.sh ($1 $2)
+arguments = $(model) $(seed)
+
+# ---- Queue Jobs ----
+
+# Define your seeds (Example: 10 seeds starting from 1000)
+# This logic queues the listed models for EACH seed in the list.
+
+model = pairing
+queue seed from (
+    1000
+    1001
+    1002
+    1003
+    1004
+    1005
+    1006
+    1007
+    1008
+    1009
+)
+
+# If you have a second model, repeat the block:
+model = lvk
+queue seed from (
+    1000
+    1001
+    1002
+    1003
+    1004
+    1005
+    1006
+    1007
+    1008
+    1009
+)

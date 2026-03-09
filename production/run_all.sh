@@ -6,10 +6,13 @@
 set -euo pipefail
 IFS=$'\n\t'
 
+# Read arguments passed by Condor
+MODEL=$1
+SEED=$2
+
 # ---- user configuration ----
-SEED=1234
-MODEL="powerlaw_peak"
 CATALOG="GWTC3"
+LIVE_POINTS=1000
 
 INPUT_DIR="input_data"
 BASE_RUN_DIR="results"
@@ -38,9 +41,9 @@ echo "=== Starting GW pipeline ==="
 # python sanity_test_methods.py --outdir "${FIG_DIR}" --tag "sanity"
 
 # ---- 2. GWTC-3 inference ----
-# python run_gwtc3_inference.py --catalog "${CATALOG}" --indir "${INPUT_DIR}" --outdir "${DATA_DIR}/inference" --nsamp-pop 200000 --seed "${SEED}"
+python3 run_gwtc3_inference.py --live-points "${LIVE_POINTS}" --catalog "${CATALOG}" --indir "${INPUT_DIR}" --outdir "${DATA_DIR}/inference" --nsamp-pop 200000 --seed "${SEED}" --model "${MODEL}"
 
 # ---- 3. plotting ----
-python make_plots.py   --indir "${DATA_DIR}/inference"   --outdir "${FIG_DIR}"
+# python make_plots.py   --indir "${DATA_DIR}/inference"   --outdir "${FIG_DIR}"
 
 echo "=== Pipeline completed successfully ==="

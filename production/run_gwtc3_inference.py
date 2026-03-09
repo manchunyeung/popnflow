@@ -4,11 +4,13 @@ from pathlib import Path
 
 def parse_args():
     p = argparse.ArgumentParser(description="GWTC-3 population inference")
+    p.add_argument("--live-points", type=int, default=1000)
     p.add_argument("--catalog", type=str, default="GWTC3")
     p.add_argument("--indir", type=Path, required=True, help="Input data directory")
     p.add_argument("--outdir", type=Path, required=True, help="Output directory")
     p.add_argument("--seed", type=int, default=1234)
     p.add_argument("--nsamp-pop", type=int, default=200000)
+    p.add_argument("--model", type=str, default = "pairing")
     return p.parse_args()
 
 args = parse_args()
@@ -190,6 +192,25 @@ def logfq(m1,m2,beta):
     return log_pq
 
 @jit
+def fq(q,beta):
+    # q = m2/m1
+    pq = mass_ratio**beta
+    pq = pq/jnp.trapezoid(pq,mass_ratio)
+
+    # jax.debug.print("pq: {}",(mass_ratio**beta).max())
+    # jax.debug.print("trap:{}", jnp.trapezoid(pq, mass_ratio))
+
+    log_pq = jnp.interp(q,mass_ratio,pq)
+
+    return log_pq
+
+@jit
+def dV_of_z_normed(z,Om0,gamma):
+    dV = dV_of_z(zgrid,H0Planck,Om0)*(1+zgrid)**(gamma-1)
+    prob = dV/jnp.trapezoid(dV,zgrid)
+    return jnp.interp(z,zgrid,prob)
+
+@jit
 def log_p_pop_pl_pl(m1,m2,z,gamma, m_min_1,m_max_1,alpha_1,dm_min_1,dm_max_1,beta,mu,sigma,f1):
     # start_time = time.time()
     log_dNdm1 = logpm1_powerlaw_powerlaw(m1,m_min_1,m_max_1,alpha_1,dm_min_1,dm_max_1,mu,sigma,f1)
@@ -214,28 +235,55 @@ def log_p_pop_pl_pl(m1,m2,z,gamma, m_min_1,m_max_1,alpha_1,dm_min_1,dm_max_1,bet
     # return log_p_sz + log_dNdm1 + log_dNdm2 + log_fq + log_dvdz
     return log_p
 
-@jit
-def fq(q,beta):
-    # q = m2/m1
-    pq = mass_ratio**beta
-    pq = pq/jnp.trapezoid(pq,mass_ratio)
-
-    # jax.debug.print("pq: {}",(mass_ratio**beta).max())
-    # jax.debug.print("trap:{}", jnp.trapezoid(pq, mass_ratio))
-
-    log_pq = jnp.interp(q,mass_ratio,pq)
-
-    return log_pq
 
 @jit
-def dV_of_z_normed(z,Om0,gamma):
-    dV = dV_of_z(zgrid,H0Planck,Om0)*(1+zgrid)**(gamma-1)
-    prob = dV/jnp.trapezoid(dV,zgrid)
-    return jnp.interp(z,zgrid,prob)
+def logpm1m2_plpeak_massratio(
+    m1, m2,
+    m_min_1, m_max_1,
+    alpha_1, dm_min_1,
+    beta, mu, sigma,
+    f
+):
+    q = m2/m1
+    alpha_1 = -alpha_1
+    # --- p(m1): Power-law component ---
+    norm_pl = (m_max_1**(1. + alpha_1) - m_min_1**(1. + alpha_1))
+    p_m1_pl = (1. + alpha_1) * m1**alpha_1 / norm_pl
 
-log_p_pop_pl_pl(35,30,.1, 3.48562259e+00, 2.02821055e+00, 9.81226509e+01, 3.87235476e+00,
- 3.92984552e+01, 3.01971181e+01, 5.70909256e+00, 2.73591739e+01,
- 8.53809384e+00, 6.53853494e-0)
+    # Mask out-of-range m1
+    p_m1_pl = jnp.where(m1 > m_max_1, 0.0, p_m1_pl)
+    p_m1_pl = jnp.where(m1 < m_min_1, 0.0, p_m1_pl)
+
+    # --- p(m1): Peak component ---
+    p_m1_peak = jnp.exp(-0.5 * (m1 - mu)**2 / sigma**2) / jnp.sqrt(2. * jnp.pi * sigma**2)
+
+    # Mixture
+    p_m1 = Sfilter_low(m1,m_min_1,dm_min_1)*(f * p_m1_peak + (1. - f) * p_m1_pl)
+
+    # --- p(q | m1): mass-ratio power law ---
+    q_min = m_min_1/m1
+    denom = 1 - q_min**(1. + beta)
+    p_q = Sfilter_low(q*m1,m_min_1,dm_min_1) * (1. + beta) * q**beta / denom
+
+    # Enforce m2 >= m_min_1
+    p_q = jnp.where(q*m1 < m_min_1, 0.0, p_q)
+
+    # --- log joint ---
+    return jnp.log(p_m1) + jnp.log(p_q)
+
+@jit
+def log_p_pop_lvk(m1,m2,z,gamma, m_min_1,m_max_1,alpha_1,dm_min_1,beta,mu,sigma,f1):
+
+    log_pm1m2 = logpm1m2_plpeak_massratio(m1, m2, m_min_1, m_max_1, alpha_1, dm_min_1, beta, mu, sigma, f1)
+    log_pz = jnp.log(dV_of_z_normed(z,Om0Planck,gamma))
+
+    log_p = log_pm1m2 + log_pz
+    log_p = jnp.where(m2<m1, log_p, -jnp.inf)
+    return log_p
+
+# log_p_pop_pl_pl(35,30,.1, 3.48562259e+00, 2.02821055e+00, 9.81226509e+01, 3.87235476e+00,
+#  3.92984552e+01, 3.01971181e+01, 5.70909256e+00, 2.73591739e+01,
+#  8.53809384e+00, 6.53853494e-0)
 
 from functools import partial
 jr = jax.random
@@ -254,6 +302,174 @@ m1det_ = m1det.reshape(Nobs, 4096)
 m2det_ = m2det.reshape(Nobs, 4096)
 
 injection_file = f"{args.indir}/endo3_bbhpop-LIGO-T2100113-v12.hdf5"
+
+def load_selection_samples(
+    file,
+    far_threshold=1.0,
+    rng=None,
+):
+    """
+    Return (m1det, m2det, dL, ra, dec, pdraw, ndraw) for detected injections.
+
+    - ndraw is the total number of generated injections (accepted + rejected).
+    - If nsamp is not None, a subsample of detected injections is drawn with
+      proper importance weighting so that ndraw stays the same and pdraw
+      is corrected for the sampling probability.
+
+    Parameters
+    ----------
+    file : str
+        Path to injection file.
+    nsamp : int or None
+        Number of detected injections to return. If None, return all detected.
+    far_threshold : float
+        FAR threshold (per year) for detection.
+    rng : np.random.Generator or None
+        RNG for subsampling. If None, a new default_rng() is created.
+
+    Returns
+    -------
+    m1detsels : jnp.ndarray
+    m2detsels : jnp.ndarray
+    dLsels    : jnp.ndarray
+    rasels    : jnp.ndarray
+    decsels   : jnp.ndarray
+    pdraw_sel : jnp.ndarray
+    ndraw     : int
+    """
+    if rng is None:
+        rng = np.random.default_rng()
+
+    with h5py.File(file, "r") as f:
+        # ------------------------------------------------------------
+        # Branch 1: "injections/..." format
+        # ------------------------------------------------------------
+        if "injections" in f:
+            m1det_all = np.array(f["injections/mass1"][:])
+            m2det_all = np.array(f["injections/mass2"][:])
+            dL_all    = np.array(f["injections/distance"][:])
+            ra_all    = np.array(f["injections/right_ascension"][:])
+            dec_all   = np.array(f["injections/declination"][:])
+
+            # Cosmology for reference distribution
+            H0Planck = Planck15.H0.value
+            Om0Planck = Planck15.Om0
+
+            z_all = z_of_dL(dL_all, H0Planck, Om0Planck)
+
+            # Reference sampling PDF in (m1_source, m2_source, z)
+            m1src_all = m1det_all / (1.0 + z_all)
+            m2src_all = m2det_all / (1.0 + z_all)
+
+            p_m1m2 = np.array(
+                f["injections/mass1_source_mass2_source_sampling_pdf"][:]
+            )
+            p_z = np.array(f["injections/redshift_sampling_pdf"][:])
+
+            # pdraw in detector-frame variables (Farr 2019 style)
+            pdraw_all = (
+                p_m1m2 * p_z
+                / (1.0 + z_all) ** 2
+                / ddL_of_z(z_all, dL_all, H0Planck, Om0Planck)
+            )
+
+            # FAR-based detection
+            pycbc_far    = np.array(f["injections/far_pycbc_hyperbank"])
+            pycbc_bbh_far = np.array(f["injections/far_pycbc_bbh"])
+            gstlal_far   = np.array(f["injections/far_gstlal"])
+            mbta_far     = np.array(f["injections/far_mbta"])
+
+            detected = (
+                (pycbc_far < far_threshold)
+                | (pycbc_bbh_far < far_threshold)
+                | (gstlal_far < far_threshold)
+                | (mbta_far < far_threshold)
+            )
+
+            ndraw = int(f.attrs["n_accepted"] + f.attrs["n_rejected"])
+
+            T = (f.attrs["end_time_s"] - f.attrs["start_time_s"]) / (
+                3600.0 * 24.0 * 365.25
+            )
+            pdraw_all /= T
+
+        # ------------------------------------------------------------
+        # Branch 2: "events/..." format
+        # ------------------------------------------------------------
+        elif "events" in f:
+            m1src_all = np.array(f["events/mass1_source"][:])
+            m2src_all = np.array(f["events/mass2_source"][:])
+            dL_all    = np.array(f["events/luminosity_distance"][:])
+            ra_all    = np.array(f["events/right_ascension"][:])
+            dec_all   = np.array(f["events/declination"][:])
+
+            H0Planck = Planck15.H0.value
+            Om0Planck = Planck15.Om0
+
+            z_all = z_of_dL(dL_all, H0Planck, Om0Planck)
+            m1det_all = m1src_all * (1.0 + z_all)
+            m2det_all = m2src_all * (1.0 + z_all)
+
+            weights = np.array(f["events/weights"][:])
+
+            ln_pdraw = np.array(
+                f[
+                    "events/lnpdraw_mass1_source_mass2_source_redshift_spin1x_spin1y_spin1z_spin2x_spin2y_spin2z"
+                ][:]
+            )
+            pdraw_all = np.exp(ln_pdraw) / (1.0 + z_all) ** 2 / ddL_of_z(
+                z_all, dL_all, H0Planck, Om0Planck
+            )
+
+            far_all = np.min(
+                [np.array(f["events/%s_far" % s][:]) for s in f.attrs["searches"]],
+                axis=0,
+            )
+
+            ndraw = int(f.attrs["total_generated"])
+
+            T = f.attrs["total_analysis_time"] / (3600.0 * 24.0 * 365.25)
+            pdraw_all /= T
+            pdraw_all /= weights
+
+            detected = far_all < far_threshold
+
+        else:
+            raise RuntimeError("Unrecognized injection file format: no 'injections' or 'events' group.")
+
+    # ------------------------------------------------------------
+    # Restrict to detected injections
+    # ------------------------------------------------------------
+    m1detsels = m1det_all[detected]
+    m2detsels = m2det_all[detected]
+    dLsels    = dL_all[detected]
+    rasels    = ra_all[detected]
+    decsels   = dec_all[detected]
+    pdraw_sel = pdraw_all[detected]
+
+    Ndet = len(m1detsels)
+    
+    pop_wt = pdraw_sel
+    unnorm_wt = pop_wt/pdraw_sel
+    sum_norm_wt = unnorm_wt / np.sum(unnorm_wt)
+    pdraw_wt = pop_wt / (np.sum(unnorm_wt) / ndraw)
+    
+    print(pdraw_wt.shape, ndraw, pdraw_wt.sum())
+
+    return (
+        jnp.array(m1detsels),
+        jnp.array(m2detsels),
+        jnp.array(dLsels),
+        # jnp.array(rasels),
+        # jnp.array(decsels),
+        jnp.array(pdraw_wt),
+        ndraw
+    )
+
+
+# m1detsels, m2detsels, dLsels, p_draw, Ndraw = load_selection_samples(injection_file)
+
+
 with h5py.File(injection_file, 'r') as f:
     Tobs = f.attrs['analysis_time_s']/(365.25*24*3600) # years
     Ndraw = f.attrs['total_generated']
@@ -309,9 +525,8 @@ rasels = jnp.array(rasels[sels])
 decsels = jnp.array(decsels[sels])
 p_draw = jnp.array(p_draw[sels])
 
-# Ndet = m1detsels.shape[0]
+Ndet = m1detsels.shape[0]
 
-Ndraw
 
 from sklearn.mixture import GaussianMixture
 import numpy as np
@@ -347,6 +562,9 @@ lq = logitq(m1detsels, m2detsels)
 X = np.column_stack([np.asarray(m1detsels), np.asarray(lq), np.asarray(dLsels)])
 
 N = m1detsels.shape[0]
+
+z_ori = z_of_dL(dLsels, H0=H0Planck)
+p_draw1 = p_draw*(1+z_ori)**2*ddL_of_z(z_ori, dLsels, H0Planck, Om0Planck)
 
 w = 1/p_draw
 
@@ -442,15 +660,7 @@ zsels = z_of_dL(dLsels, H0Planck,Om0Planck)
 m1sels = m1detsels/(1+zsels)
 m2sels = m2detsels/(1+zsels)
 
-# zsels = z_of_dL(dL_sam, H0Planck,Om0Planck)
-# m1sels = m1_sam/(1+zsels)
-# m2sels = m2_sam/(1+zsels)
-
-# eps = 1e-6
-# qsels = m2sels/m1sels
-# qsels = jnp.clip(qsels, eps, 1.0 - eps)
-# log_q = logX -jnp.log(m1sels) - jnp.log(qsels) - jnp.log1p(-qsels)
-
+     
 z = z_of_dL(dL, H0Planck, Om0Planck)
 m1 = m1det/(1+z)
 m2 = m2det/(1+z)
@@ -460,34 +670,8 @@ Ndraw = m1sels.shape[0]
 # @partial(jax.jit, static_argnames=("gmm_params",))
 @jit
 def likelihood_method_1(gamma,m_min,m_max,alpha,dm_min,dm_max,beta,mu,sigma,f1):
-    # Ndraw = m1sels.shape[0]
-
-    # new_x = gmm_sample_jax(subkey, Nresamp, gmm_params)
-    # m1_sam, m2_sam, dL_sam = new_x[:, 0], new_x[:, 1], new_x[:, 2]
-
-    # z_sam = z_of_dL(dL_sam, H0Planck)
-    # m_det_min = m_src_min * (1.0 + z_sam)
-    # m_det_max = m_src_max * (1.0 + z_sam)
-
-    # mask = (
-    #     (dL_sam > 0.0) &
-    #     (z_sam >= 0.0) & (z_sam <= z_max) &
-    #     (m1_sam >= m_det_min) & (m1_sam <= m_det_max) &
-    #     (m2_sam >= m_det_min) & (m2_sam <= m_det_max) &
-    #     (m2_sam <= m1_sam)
-    # )
-
-    # # m1_sam = m1_sam[mask]
-    # # m2_sam = m2_sam[mask]
-    # # dL_sam = dL_sam[mask]
-
-    # zsels = z_of_dL(dL_sam, H0Planck,Om0Planck)
-    # m1sels = m1_sam/(1+zsels)
-    # m2sels = m2_sam/(1+zsels)
-
-
     log_det_weights = log_p_pop_pl_pl(m1sels,m2sels,zsels,gamma,m_min,m_max,alpha,dm_min,dm_max,beta,mu,sigma,f1)
-    log_det_weights += - jnp.log(p_draw) - 2*jnp.log1p(zsels) - jnp.log(ddL_of_z(zsels,dLsels,H0Planck, Om0Planck))
+    log_det_weights += - jnp.log(p_draw) 
     # log_det_weights += - 2*jnp.log1p(zsels) - jnp.log(ddL_of_z(zsels,dL_sam,H0Planck, Om0Planck))
     # log_det_weights = jnp.where(mask, log_det_weights, -jnp.inf)
 
@@ -500,11 +684,6 @@ def likelihood_method_1(gamma,m_min,m_max,alpha,dm_min,dm_max,beta,mu,sigma,f1):
     ll = jnp.where((Neff <= 4 * Nobs), ll, 0)
     ll += -Nobs*log_mu + Nobs*(3 + Nobs)/(2*Neff)
 
-    # ll, Neff = log_mu_selection(gamma,m_min,m_max,alpha,dm_min,dm_max,beta,mu,sigma,f1, rng, Nresamp, qdet_params, pinj_params)
-    # print(ll)
-    # jax.debug.print('ll{}', ll)
-
-    # ll = 0
     log_weights = log_p_pop_pl_pl(m1,m2,z,gamma,m_min,m_max,alpha,dm_min,dm_max,beta,mu,sigma,f1)
     log_weights += - jnp.log(ddL_of_z(z,dL,H0Planck,Om0Planck)) - 2 * jnp.log1p(z) - 2*jnp.log(dL) # jacobian
 
@@ -513,14 +692,42 @@ def likelihood_method_1(gamma,m_min,m_max,alpha,dm_min,dm_max,beta,mu,sigma,f1):
 
     return ll, Neff
 
+@jit
+def likelihood_lvk_met1(gamma, m_min, m_max, alpha, dm_min, beta, mu, sigma, f1):
+    log_det_weights = log_p_pop_lvk(m1sels, m2sels, zsels, gamma, m_min, m_max, alpha, dm_min, beta, mu, sigma, f1)
+    # log_det_weights += - 2*jnp.log1p(zsels) - jnp.log(ddL_of_z(zsels, dLsels, H0Planck, Om0Planck))
+
+    log_mu = logsumexp(log_det_weights) - jnp.log(Ndraw)
+    log_s2 = logsumexp(2*log_det_weights) - 2.0*jnp.log(Ndraw)
+    log_sigma2 = logdiffexp(log_s2, 2.0*log_mu - jnp.log(Ndraw))
+    Neff = jnp.exp(2.0*log_mu - log_sigma2)
+
+    ll = -jnp.inf
+    ll = jnp.where((Neff <= 4 * Nobs), ll, 0.0)
+    ll += -Nobs*log_mu + Nobs*(3 + Nobs)/(2*Neff)
+
+    # 2. Data Likelihood
+    log_weights = log_p_pop_lvk(m1, m2, z, gamma, m_min, m_max, alpha, dm_min, beta, mu, sigma, f1)
+    log_weights += - jnp.log(ddL_of_z(z,dL,H0Planck,Om0Planck)) - 2 * jnp.log1p(z) - 2*jnp.log(dL) # jacobian
+
+    log_weights = log_weights.reshape((Nobs,nsamp))
+    ll += jnp.sum(-jnp.log(nsamp) + logsumexp(log_weights,axis=-1))
+    
+    return ll, Neff
+
 
 def loglike_method_1(coord):
-    gamma, m_min, m_max, alpha, dm_min, dm_max, beta, mu, sigma, f1 = coord
+    if args.model == "lvk":
+        # Unpack 9 parameters
+        gamma, m_min, m_max, alpha, dm_min, beta, mu, sigma, f1 = coord
+        
+        ll, Neff = likelihood_lvk_met1(gamma, m_min, m_max, alpha, dm_min, beta, mu, sigma, f1)
+    else: # Default: pairing / powerlaw_peak (10 parameters)
+        # Unpack 10 parameters (includes dm_max)
+        gamma, m_min, m_max, alpha, dm_min, dm_max, beta, mu, sigma, f1 = coord
+        
+        ll, Neff = likelihood_method_1(gamma, m_min, m_max, alpha, dm_min, dm_max, beta, mu, sigma, f1)
 
-    ll, Neff = likelihood_method_1(
-        gamma, m_min, m_max, alpha, dm_min, dm_max,
-        beta, mu, sigma, f1,
-    )
     if np.isnan(ll):
         return -np.inf
     elif (Neff < 4*Nobs):
@@ -569,16 +776,21 @@ muz_hi = 2.0
 sigmaz_lo = 0.01
 sigmaz_hi = 0.5
 
-lower_bound = np.array([gamma_low, m_min_1_low,m_max_1_low,alpha_1_low,dm_min_1_low,dm_max_1_low,beta_low,mu_low,sigma_low,f1_low])
-upper_bound = np.array([gamma_high, m_min_1_high,m_max_1_high,alpha_1_high,dm_min_1_high,dm_max_1_high,beta_high,mu_high,sigma_high,f1_high,])
+if args.model == "lvk":
+    # LVK model typically does not use dm_max (high mass smoothing)
+    # Order: gamma, m_min, m_max, alpha, dm_min, beta, mu, sigma, f1
+    lower_bound = np.array([gamma_low, m_min_1_low, m_max_1_low, alpha_1_low, dm_min_1_low, beta_low, mu_low, sigma_low, f1_low])
+    upper_bound = np.array([gamma_high, m_min_1_high, m_max_1_high, alpha_1_high, dm_min_1_high, beta_high, mu_high, sigma_high, f1_high])
+    labels = ['gamma', 'm_min_1', 'm_max_1', 'alpha_1', 'dm_min_1', 'beta', 'mu', 'sigma', 'f1']
+else:
+    # Pairing/Default model (Uses dm_max)
+    # Order: gamma, m_min, m_max, alpha, dm_min, dm_max, beta, mu, sigma, f1
+    lower_bound = np.array([gamma_low, m_min_1_low, m_max_1_low, alpha_1_low, dm_min_1_low, dm_max_1_low, beta_low, mu_low, sigma_low, f1_low])
+    upper_bound = np.array([gamma_high, m_min_1_high, m_max_1_high, alpha_1_high, dm_min_1_high, dm_max_1_high, beta_high, mu_high, sigma_high, f1_high])
+    labels = ['gamma', 'm_min_1', 'm_max_1', 'alpha_1', 'dm_min_1', 'dm_max_1', 'beta', 'mu', 'sigma', 'f1']
 
-#priors
 ndims = len(lower_bound)
-nlive = 1000
-
-
-labels = ['gamma', 'm_min_1','m_max_1','alpha_1','dm_min_1','dm_max_1','beta', 'mu','sigma','f1']
-
+nlive = args.live_points
 
 def prior_transform(theta):
     transformed_params = [
@@ -598,11 +810,9 @@ bound = 'multi'
 sample = 'rwalk'
 nprocesses = 1
 
-# dsampler = NestedSampler(loglike_method_1, prior_transform, ndims, bound=bound, sample=sample, nlive=200)
-# dsampler.run_nested(dlogz=0.1)
-
-
-# dsampler.save(f'{args.outdir}/met1.h5')
+dsampler = NestedSampler(loglike_method_1, prior_transform, ndims, bound=bound, sample=sample, nlive=nlive)
+dsampler.run_nested(dlogz=0.1)
+dsampler.save(f'{args.outdir}/{args.model}_{args.seed}met1.h5')
 # print('met1 saved')
 
 from sklearn.mixture import GaussianMixture
@@ -621,30 +831,18 @@ for e in range(Nobs):
         np.asarray(dL_[e])
     ])  # (N_e, D)
 
-    best_gmm = None
-    best_bic = np.inf
 
-    for K in K_candidates:
-        gmm = GaussianMixture(
-            n_components=K,
-            covariance_type='full',
-            reg_covar=1e-6,
-            n_init=5,         # you can reduce n_init here to save time
-            random_state=args.seed,
-        ).fit(X_e)
+    gmm = GaussianMixture(
+        n_components=7,
+        covariance_type='full',
+        reg_covar=1e-6,
+        n_init=5,         # you can reduce n_init here to save time
+        random_state=args.seed,
+    ).fit(X_e)
 
-        bic = gmm.bic(X_e)  # or gmm.aic(X_e)
+    gmms.append(gmm)
 
-        if bic < best_bic:
-            best_bic = bic
-            best_gmm = gmm
 
-    gmms.append(best_gmm)
-    best_Ks.append(best_gmm.n_components)
-
-# print("Chosen K per event:", best_Ks)
-K_max = max(best_Ks)
-print('K_max', K_max)
 
 K = 7  # try BIC/AIC later
 gmms = []
@@ -1053,63 +1251,12 @@ def likelihood_method_3(gamma,m_min,m_max,alpha,dm_min,dm_max,beta,mu,sigma,f1):
     per_event_log_like = jnp.nan_to_num(jsp.special.logsumexp(log_weights[None, :] + logp_E_N + logJ[None, :], axis=1)) - jnp.log(nsamp_pop)  # (E,)
 
     ll += jnp.sum(per_event_log_like)
-    # end_time = time.time()
-    # duration = end_time - start_time
-
-    # jax.debug.print('duration{}', duration)
     return ll, Neff
 
-def loglike_method_3(coord):
-    gamma,m_min,m_max,alpha,dm_min,dm_max,beta,mu,sigma,f1 = coord
-
-    ll, Neff = likelihood_method_3(gamma,m_min,m_max,alpha,dm_min,dm_max,beta,mu,sigma,f1)
-    if np.isnan(ll):
-        return -np.inf
-    elif (Neff < 4*Nobs):
-        return -np.inf
-    else:
-        return ll
-
-# #sampling
-
-# from dynesty.utils import resample_equal
-# from dynesty import NestedSampler, DynamicNestedSampler
-# import multiprocessing as multi
-
-# bound = 'multi'
-# sample = 'rwalk'
-# nprocesses = 1
-
-# d3sampler = NestedSampler(loglike_method_3, prior_transform, ndims, bound=bound, sample=sample, nlive=nlive)
-# d3sampler.run_nested(dlogz=0.1)
-
-# import corner
-
-# dres = d3sampler.results
-
-# dlogZdynesty = dres.logz[-1]        # value of logZ
-# dlogZerrdynesty = dres.logzerr[-1]  # estimate of the statistcal uncertainty on logZ
-
-# # output marginal likelihood
-# print('Marginalised evidence (using dynamic sampler) is {} ± {}'.format(dlogZdynesty, dlogZerrdynesty))
-
-# # get the posterior samples
-# dweights = np.exp(dres['logwt'] - dres['logz'][-1])
-# dpostsamples = resample_equal(dres.samples, dweights)
-
-# print('Number of posterior samples (using dynamic sampler) is {}'.format(dpostsamples.shape[0]))
-
-# fig3 = corner.corner(dpostsamples,  hist_kwargs={'density': True},labels=labels, fig=fig1, color='orange')
-# # plt.savefig('/content/drive/MyDrive/popnflow_goog/GWTC1_meth2.png')
-# # plt.show()
-# # plt.savefig('/content/drive/MyDrive/popnflow_goog/overplot.png')
-
 @jit
-def likelihood_method_1_sel(gamma,m_min,m_max,alpha,dm_min,dm_max,beta,mu,sigma,f1):
-
-    log_det_weights = log_p_pop_pl_pl(m1sels,m2sels,zsels,gamma,m_min,m_max,alpha,dm_min,dm_max,beta,mu,sigma,f1)
-
-    log_det_weights += - 2*jnp.log1p(zsels) - jnp.log(ddL_of_z(zsels,dL_sam,H0Planck, Om0Planck))
+def likelihood_lvk_met3(gamma, m_min, m_max, alpha, dm_min, beta, mu, sigma, f1):
+    log_det_weights = log_p_pop_lvk(m1sels, m2sels, zsels, gamma, m_min, m_max, alpha, dm_min, beta, mu, sigma, f1)
+    log_det_weights += - 2*jnp.log1p(zsels) - jnp.log(ddL_of_z(zsels, dL_sam, H0Planck, Om0Planck))
 
     log_mu = logsumexp(log_det_weights) - jnp.log(Ndraw)
     log_s2 = logsumexp(2*log_det_weights) - 2.0*jnp.log(Ndraw)
@@ -1117,21 +1264,32 @@ def likelihood_method_1_sel(gamma,m_min,m_max,alpha,dm_min,dm_max,beta,mu,sigma,
     Neff = jnp.exp(2.0*log_mu - log_sigma2)
 
     ll = -jnp.inf
-    ll = jnp.where((Neff <= 4 * Nobs), ll, 0)
+    ll = jnp.where((Neff <= 4 * Nobs), ll, 0.0)
     ll += -Nobs*log_mu + Nobs*(3 + Nobs)/(2*Neff)
 
-    log_weights = log_p_pop_pl_pl(m1,m2,z,gamma,m_min,m_max,alpha,dm_min,dm_max,beta,mu,sigma,f1)
-    log_weights += - jnp.log(ddL_of_z(z,dL,H0Planck,Om0Planck)) - 2 * jnp.log1p(z) - 2*jnp.log(dL) # jacobian
+    # 2. Data Likelihood
+    log_pop = log_p_pop_lvk(m1s_pop,m2s_pop,zs_pop,gamma, m_min, m_max, alpha, dm_min, beta, mu, sigma, f1)
+    log_weights = log_pop - log_q
 
-    log_weights = log_weights.reshape((Nobs,nsamp))
-    ll += jnp.sum(-jnp.log(nsamp) + logsumexp(log_weights,axis=-1))
-
+    per_event_log_like = jnp.nan_to_num(jsp.special.logsumexp(log_weights[None, :] + logp_E_N + logJ[None, :], axis=1)) - jnp.log(nsamp_pop)  # (E,)
+    ll += jnp.sum(per_event_log_like)
+    
     return ll, Neff
 
-def loglike_method_1_sel(coord):
-    gamma,m_min,m_max,alpha,dm_min,dm_max,beta,mu,sigma,f1 = coord
 
-    ll, Neff = likelihood_method_3(gamma,m_min,m_max,alpha,dm_min,dm_max,beta,mu,sigma,f1)
+
+def loglike_method_3(coord):
+    if args.model == "lvk":
+        # Unpack 9 parameters
+        gamma, m_min, m_max, alpha, dm_min, beta, mu, sigma, f1 = coord
+        
+        ll, Neff = likelihood_lvk_met3(gamma, m_min, m_max, alpha, dm_min, beta, mu, sigma, f1)
+    else: # Default: pairing / powerlaw_peak (10 parameters)
+        # Unpack 10 parameters (includes dm_max)
+        gamma, m_min, m_max, alpha, dm_min, dm_max, beta, mu, sigma, f1 = coord
+        
+        ll, Neff = likelihood_method_3(gamma, m_min, m_max, alpha, dm_min, dm_max, beta, mu, sigma, f1)
+
     if np.isnan(ll):
         return -np.inf
     elif (Neff < 4*Nobs):
@@ -1149,10 +1307,10 @@ bound = 'multi'
 sample = 'rwalk'
 nprocesses = 1
 
-d2sampler = NestedSampler(loglike_method_1_sel, prior_transform, ndims, bound=bound, sample=sample, nlive=nlive)
+d2sampler = NestedSampler(loglike_method_3, prior_transform, ndims, bound=bound, sample=sample, nlive=nlive)
 d2sampler.run_nested(dlogz=0.1)
 
-d2sampler.save(f'{args.outdir}/met3.h5')
+d2sampler.save(f'{args.outdir}/{args.model}_{args.seed}met3.h5')
 
 
 
