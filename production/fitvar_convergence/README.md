@@ -1,5 +1,24 @@
 # Is the term-(B) floor real, and what makes it?
 
+> ## SCOPE: every number below was measured on the MDC, which is RETIRED.
+>
+> Simon confirmed 2026-09-18 that the paper uses **sim_cat6_sharp_w8** and the MDC
+> is no longer used. These results were produced before that was established, so
+> **do not quote any of them as sim_cat6 numbers.** They are not weak evidence
+> about sim_cat6 either: `fitvar-npe-scaling` records that the floor has a
+> different severity *and a different per-event driver* on the two catalogs
+> (89% vs 47% N_PE-independent; high-mass driver on the MDC, low-mass on
+> sim_cat6), so the mechanism findings here — in particular the 21% EM-noise
+> share — have to be re-measured before they mean anything for the paper.
+>
+> The scripts now take `--dataset simcat6` (the default) or `--dataset mdc`, with
+> an `nsamp` guard that aborts if the wrong catalog is loaded (5000 vs 3343).
+> `run_emvar.py` and `run_bootbias.py` are ported; the sim_cat6 runs have NOT
+> been done. `run_arms.py` and `run_fresh.py` are not yet ported.
+>
+> The MDC-derived *methodology* stands — the arms design, the fresh-sample
+> surrogate, the fixed-data EM test — only the numbers are off-target.
+
 Complementary to `production/fitvar_npe_scan/` (which established `B ~ N_PE^-0.43`
 on the MDC and `-0.80` on sim_cat6). That scan varied N_PE by resampling each
 event's fixed 3343 PE samples **with replacement**, so by construction it could

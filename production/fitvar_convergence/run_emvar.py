@@ -34,6 +34,7 @@ import numpy as np
 
 PROD = '/home/manchun.yeung/population/simon/popnflow/production'
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
 
 
 def prior_transform(u): return u
@@ -60,28 +61,22 @@ def main():
                     help='EM restarts; -1 = production value (N_INIT_FITVAR).')
     ap.add_argument('--n-jobs', type=int, default=30)
     ap.add_argument('--seed', type=int, default=777)
+    ap.add_argument('--dataset', type=str, default='simcat6',
+                    help="'simcat6' (the paper's catalog) or 'mdc' (retired).")
     ap.add_argument('--out', type=str, default=os.path.join(HERE, 'emvar.npz'))
     cli = ap.parse_args()
 
-    sys.argv = [
-        'make_diagnostic_plots.py', '--run', 'mdc', '--catalog', '0',
-        '--indir', os.path.join(PROD, 'results/data'),
-        '--outdir', os.path.join(HERE, 'scratch'),
-        '--pe-m1det', os.path.join(PROD, 'input_data/mdc_m1det_69rand.txt'),
-        '--pe-m2det', os.path.join(PROD, 'input_data/mdc_m2det_69rand.txt'),
-        '--pe-dL', os.path.join(PROD, 'input_data/mdc_dL_69rand.txt'),
-        '--injection-file', os.path.join(PROD, 'input_data/endo3_bbhpop-LIGO-T2100113-v12.hdf5'),
-        '--pool-cache', os.path.join(PROD, 'cache/pool_1M.npz'),
-        '--fitvar-n-coords', str(cli.n_coords), '--seed', str(cli.seed),
-        '--fitvar-moment-check',
-    ]
-    os.makedirs(os.path.join(HERE, 'scratch'), exist_ok=True)
+    from _dataset import build_argv, check_nsamp
+    scratch = os.path.join(HERE, 'scratch')
+    os.makedirs(scratch, exist_ok=True)
+    sys.argv = build_argv(cli.dataset, scratch, cli.n_coords, cli.seed)
     sys.path.insert(0, PROD)
     import make_diagnostic_plots as MD
     import jax.numpy as jnp
     from joblib import Parallel, delayed
 
     nsamp, Nobs = MD.nsamp, MD.Nobs
+    check_nsamp(cli.dataset, nsamp)
     n_init = MD.N_INIT_FITVAR if cli.n_init < 0 else cli.n_init
     events = (list(range(Nobs)) if cli.events == 'all'
               else [int(x) for x in cli.events.split(',')])
