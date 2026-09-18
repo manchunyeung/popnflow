@@ -72,10 +72,14 @@ def main():
     ap.add_argument('--n-jobs', type=int, default=30)
     ap.add_argument('--seed', type=int, default=777)
     ap.add_argument('--dataset', type=str, default='simcat6')
+    ap.add_argument('--k-mode', choices=['per-event', 'fixed'], default='per-event',
+                    help="'per-event' uses the BIC-argmin K the inference actually "
+                         "loads (3..10, median 5); 'fixed' uses the fitvar "
+                         "diagnostic's uniform K_PER_EVENT_FITVAR=7.")
     ap.add_argument('--out', type=str, default=os.path.join(HERE, 'bagging.npz'))
     cli = ap.parse_args()
 
-    from _dataset import build_argv, check_nsamp
+    from _dataset import build_argv, check_nsamp, per_event_K
     scratch = os.path.join(HERE, 'scratch')
     os.makedirs(scratch, exist_ok=True)
     sys.argv = build_argv(cli.dataset, scratch, cli.n_coords, cli.seed)
@@ -90,7 +94,12 @@ def main():
     events = (list(range(Nobs)) if cli.events == 'all'
               else [int(x) for x in cli.events.split(',')])
     K = cli.n_bag
-    print(f"[bag] K={K}  R={cli.R}  nsamp={nsamp}  events={len(events)}")
+    if cli.k_mode == 'per-event':
+        Kcomp = per_event_K(cli.dataset)
+    else:
+        Kcomp = np.full(Nobs, MD.K_PER_EVENT_FITVAR, dtype=int)
+    print(f"[bag] n_bag={K}  R={cli.R}  nsamp={nsamp}  events={len(events)}  "
+          f"k_mode={cli.k_mode}")
 
     qstar = MD._build_qstar_pool(cli.M, MD.args.fitvar_defensive_frac,
                                  MD.args.fitvar_broad_inflate, cli.seed)
@@ -125,14 +134,14 @@ def main():
         X = MD._pe_detframe(e)
 
         # ---- reference point estimates on the REAL samples ------------------
-        g0 = _fit_gmm(X, MD.K_PER_EVENT_FITVAR, MD.REG_COVAR_FITVAR,
+        g0 = _fit_gmm(X, int(Kcomp[e]), MD.REG_COVAR_FITVAR,
                       MD.N_INIT_FITVAR, cli.seed)
         lnL_ref_plain[ie] = lnL_from(logp_of(g0)[None])[0]
 
         rs0 = np.random.default_rng([cli.seed, e, 10_000])
         subs0 = [X[rs0.integers(0, nsamp, size=nsamp)] for _ in range(K)]
         gs0 = Parallel(n_jobs=cli.n_jobs)(
-            delayed(_fit_gmm)(s, MD.K_PER_EVENT_FITVAR, MD.REG_COVAR_FITVAR,
+            delayed(_fit_gmm)(s, int(Kcomp[e]), MD.REG_COVAR_FITVAR,
                               MD.N_INIT_FITVAR, cli.seed) for s in subs0)
         bag0 = np.asarray(jlse(jnp.asarray(np.stack([logp_of(g) for g in gs0])),
                                axis=0) - np.log(K), dtype=np.float32)
@@ -152,7 +161,7 @@ def main():
                 tasks.append(Db[rb.integers(0, nsamp, size=nsamp)])   # inner
 
         fits = Parallel(n_jobs=cli.n_jobs)(
-            delayed(_fit_gmm)(s, MD.K_PER_EVENT_FITVAR, MD.REG_COVAR_FITVAR,
+            delayed(_fit_gmm)(s, int(Kcomp[e]), MD.REG_COVAR_FITVAR,
                               MD.N_INIT_FITVAR, cli.seed) for s in tasks)
 
         blk_plain = np.zeros((cli.R, M_max), dtype=np.float32)

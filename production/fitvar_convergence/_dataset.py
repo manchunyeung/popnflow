@@ -61,6 +61,41 @@ def build_argv(dataset, outdir, n_coords, seed):
     ] + d['extra']
 
 
+def per_event_K(dataset, catalog=0):
+    """The per-event GMM component counts the INFERENCE actually uses.
+
+    sim_cat_inference.py loads pre-fitted GMMs (`--gmm-file`) and takes each
+    event's K from the loaded shape -- `--kfixed` is recorded but moot. Those
+    K's are the BIC-argmin selection in event_gmms.h5 and run 3..10 (median 5);
+    only 5 of 69 events are K=7. The fitvar diagnostic's uniform
+    K_PER_EVENT_FITVAR=7 therefore measures a DIFFERENT estimator than the one
+    being used for inference, which is why this exists.
+
+    Returns an int array of length Nobs, ordered as the catalog's events.
+    """
+    import json
+
+    import h5py
+    import numpy as np
+
+    if dataset != 'simcat6':
+        raise SystemExit(f"per-event K is only wired up for simcat6, not {dataset!r}")
+    info = os.path.join(PROD, f'sim_cat6_sharp_w8/inference/simcat_cat{catalog:03d}_info.json')
+    with open(info) as fh:
+        d = json.load(fh)
+    idx = d['event_indices']
+    with h5py.File(os.path.join(PROD, 'sim_cat6_sharp_w8/event_gmms.h5'), 'r') as f:
+        K = np.array([f[f'pool_{i:03d}'].attrs['k_argmin'] for i in idx], dtype=int)
+    rec = np.asarray(d['K_per_event'], dtype=int)
+    if not np.array_equal(K, rec):
+        raise SystemExit("[dataset] k_argmin does not match the run's recorded "
+                         "K_per_event -- refusing to guess which the inference used.")
+    print(f"[dataset] per-event K from event_gmms.h5 (BIC argmin): "
+          f"min={K.min()} median={int(np.median(K))} max={K.max()} "
+          f"mean={K.mean():.2f}; {(K == 7).sum()}/{len(K)} events are K=7")
+    return K
+
+
 def check_nsamp(dataset, nsamp):
     """Guard against silently running on the wrong catalog."""
     want = DATASETS[dataset]['nsamp_expected']
