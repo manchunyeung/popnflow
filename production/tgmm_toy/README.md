@@ -50,17 +50,24 @@ See `out/case_peakatedgeTN103_seed0.png`.
 Gaussian noise σ ~ U(0.1, 0.5) → exact truncated-normal posteriors; 20 catalogs ×
 200 events; no selection). Shift of the λ posterior mean vs the EXACT posterior:
 
-| method | pop support = D |
-|---|---|
-| GMM | −0.171 ± 0.008 σ |
-| box (prod.) | **−0.186 ± 0.008 σ** |
-| post-hoc trunc | −0.171 ± 0.008 σ |
-| TGMM | **+0.001 ± 0.003 σ** |
+| method | pop support = D | pop on [-1.5,1.5] (see note) |
+|---|---|---|
+| GMM | −0.171 ± 0.008 σ | −0.001 ± 0.001 σ |
+| box (prod.) | **−0.186 ± 0.008 σ** | −0.050 ± 0.001 σ |
+| post-hoc trunc | −0.171 ± 0.008 σ | −0.047 ± 0.001 σ |
+| TGMM | **+0.001 ± 0.003 σ** | −0.000 ± 0.001 σ |
 
-All 20 catalogs shift low for the GMM variants (−0.11 to −0.28 σ); widths are
-unchanged. A fixed per-event bias grows ∝ √N in σ units. The second scenario
-(population wider than the PE prior, `part2_popwide.json`) was still running at
-commit time.
+All 20 catalogs shift low for the GMM variants in the pop-support = D case
+(−0.11 to −0.28 σ); widths are unchanged. A fixed per-event bias grows ∝ √N in
+σ units.
+
+Note on the wide-population column: this scenario is MISSPECIFIED by
+construction (population normalised on [-1.5, 1.5] but only events with true
+x in D are drawn, no selection term), so even the EXACT posterior is off the
+truth by −1.34 (14 σ). Method-vs-exact shifts are all ≤ 0.05 σ, and the plain
+GMM's leak (which gets population weight there) happens to cancel its edge
+deficit. Treat it as inconclusive; a proper test needs a selection term for
+the PE-prior bound.
 
 **Caveats.** The TGMM is the exact model family for these truncated-normal
 posteriors, which flatters it; on the ramp it sometimes underfits (K=1,
