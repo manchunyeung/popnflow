@@ -152,7 +152,7 @@ def main():
         Ba = np.median(V[arm].sum(axis=1))
         lo16, hi84 = np.percentile(V[arm].sum(axis=1), [16, 84])
         print(f"  {arm:11s} B = {Ba:.4f}  [16-84: {lo16:.4f}, {hi84:.4f}]  "
-              f"{(1 - Ba / Bn) * 100:+6.1f}% vs nobox")
+              f"{(Ba / Bn - 1) * 100:+6.1f}% change vs nobox")
     sh = (ref['box_fixed'] - ref['nobox']).sum(axis=0)
     print(f"\n  box vs nobox on the real samples: Lambda-indep {np.mean(sh):+.4f} nats, "
           f"Lambda-dep sd {np.std(sh, ddof=1):.4f} nats")
