@@ -1,0 +1,63 @@
+# ============================================================================
+# SBC hierarchical inference: one job per (block, catalog, method).
+# Driven by sbc.dag; VARS supply suite/block/cat/method/nlive.
+#
+# met4 jobs are given a met1 PARENT by the DAG because Method 4 reads met1's
+# posterior median (*_lambda0.npy) as its mixture reference.
+#
+# MEMORY is a per-method VAR set by make_sbc_dag.py, NOT the uniform 15 GB that
+# production/*.sub uses. Simon flattened those to 15 GB himself on 2026-08-05 to
+# match run_multicatalog.sub's convention -- this deliberately departs from it,
+# because measured peak MemoryUsage over ~500 real jobs is far below:
+#     met1  median 1.1 GB  p95 2.3 GB  max 2.9 GB
+#     met3  median 2.7 GB  p95 3.6 GB  max 4.0 GB
+#     met4  median 4.0 GB  p95 4.9 GB  max 5.1 GB
+# On a 512 GB / 128-core node that is 4 GB per core, so a 15 GB 1-CPU job blocks
+# ~4 cores' worth of memory: 34 jobs fit and 94 cores sit idle. The values below
+# carry ~40% headroom over the observed max and roughly triple the achievable
+# concurrency. Raise them if a job is ever held for memory.
+#
+# WALLTIME has a long right tail: met3's max was 64 h against a 3.16 h median,
+# and 7/50 met3 runs in the cat6 sweep were killed at 11-16 h still at
+# dlogz 0.22-1.5. RETRY in the DAG covers evictions, not non-convergence --
+# a run that genuinely will not converge should be excluded by sbc_02's
+# --min-ess rather than retried forever.
+# ============================================================================
+universe   = vanilla
+executable = /home/manchun.yeung/population/simon/popnflow/production/sbc_suite/run_sbc_block.sh
+arguments  = "infer $(suite) $(block) $(cat) $(method) $(nlive)"
+
+environment      = "HOME=$ENV(HOME)"
+accounting_group = ligo.prod.o3.cbc.bayesianpopulations.parametric
+initialdir = /home/manchun.yeung/population/simon/popnflow/production/sbc_suite
+
+request_cpus   = 1
+request_memory = $(mem)
+request_disk   = 5000M
+
+job_machine_attrs = Machine
+job_machine_attrs_history_length = 4
+requirements = (TARGET.Machine =!= MachineAttrMachine0) && \
+               (TARGET.Machine =!= MachineAttrMachine1) && \
+               (TARGET.Machine =!= MachineAttrMachine2) && \
+               (TARGET.Machine =!= MachineAttrMachine3)
+
+# TRANSIENT NFS HOLDS (HoldReasonCode 7). When many jobs start at once on
+# different nodes, the shared-filesystem open() of the .out/.err file can time
+# out, and Condor reports it as "No such file or directory" -- indistinguishable
+# from a genuinely missing path. Observed here: 6 jobs held at once with
+#   Failed to open '.../logs/inf_<node>.out' as standard output (errno 2)
+# while the directory demonstrably existed and was writable. Same failure mode
+# that killed ~180/276 jobs in bilby_pe_cat6 (see that submit file's header).
+#
+# Release them automatically after a short delay so the schedd re-runs them,
+# up to 5 attempts. Holds for any OTHER reason stay held for inspection rather
+# than being retried blindly.
+periodic_release = (HoldReasonCode =?= 7) && (NumJobStarts < 5) && \
+                   (CurrentTime - EnteredCurrentStatus > 120)
+
+notification = never
+log    = $(suite)/logs/inf_$(tag).log
+error  = $(suite)/logs/inf_$(tag).err
+output = $(suite)/logs/inf_$(tag).out
+queue

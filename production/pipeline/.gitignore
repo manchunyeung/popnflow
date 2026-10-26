@@ -1,0 +1,4 @@
+output/
+__pycache__/
+# the repo-wide .gitignore drops every data/ dir; this one holds code
+!data/

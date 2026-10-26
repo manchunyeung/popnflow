@@ -1,0 +1,131 @@
+# ============================================================================
+# BOXFIX + CHOLESKY-FIX SWEEP AT nlive=1000 -- THE PAPER VERSION of the
+# fixed-Lambda MDC arm (bias/pull box plots and the PP plot).
+#
+# WHY THIS AND NOT run_sim_cat_boxfix_nlive1000.sub. That sub predates the
+# Cholesky fix and writes to *_nlive1000 directories carrying NO "cholfix"
+# marker, so its output could not be told apart from pre-fix results. It was
+# never run to completion (its dirs are empty apart from a few stale partials
+# in the SBC suite). This one supersedes it: same box, same nlive, but on the
+# fixed proposal, and into unambiguously named directories.
+#
+# WHY nlive=1000 AT ALL. The nlive=200 cholfix sweep
+# (run_sim_cat_boxfix_cholfix.sub) was the diagnostic -- cheap enough to
+# confirm the fix lands where expected. It did: the paired met3-vs-met1 beta
+# gap moved -0.342 -> -0.190 (n=50) and met4 -0.361 -> -0.244 (n=49). But
+# sim_cat6_sharp_w8/inference/ -- which holds met1, the reference arm every
+# figure is drawn against -- is nlive=1000, so an nlive=200 met3/met4 column
+# carries an nlive confound in the same panel. At nlive=1000 the comparison is
+# like-for-like on both axes, which is what the paper figures need.
+#
+# NOTE THE OPEN QUESTION THIS SWEEP INHERITS. PROPOSAL_BUG.md's sampler-based
+# split predicted the post-fix gap would land near -0.09 (the box term alone);
+# the nlive=200 sweep left -0.190. That residual is NOT understood, and
+# nlive=1000 is not expected to explain it -- it is a bias, not resolution.
+# Do not read a change here as resolving it.
+#
+# NOTHING EXISTING IS TOUCHED. Output directories, both new:
+#     met3 -> sim_cat6_sharp_w8/inference_boxfix_cholfix_nlive1000/
+#     met4 -> sim_cat6_sharp_w8/inference_met4_nlive1000_boxfix_cholfix/
+# Existing and untouched: inference/ (met1 reference, nlive=1000),
+# inference_boxfix/ + inference_met4_nlive200_boxfix/ (pre-fix nlive=200),
+# inference_boxfix_cholfix/ + inference_met4_nlive200_boxfix_cholfix/ (the
+# nlive=200 cholfix diagnostic), and the empty inference_boxfix_nlive1000/ +
+# inference_met4_nlive1000_boxfix/ from the abandoned pre-fix attempt.
+#
+# WHY THE OUTTAG IS A PER-ROW QUEUE COLUMN AND NOT A CONSTANT.
+# run_sim_cat_catalog.sh:123 builds
+#     met4 : ${INDIR}/inference_met4_nlive${NLIVE}${OUTTAG:+_${OUTTAG}}
+#     else : ${INDIR}/inference${OUTTAG:+_${OUTTAG}}
+# so met4's directory already carries nlive but met3's does NOT. A single
+# OUTTAG=boxfix_cholfix would therefore send met3 straight back into the
+# EXISTING nlive=200 inference_boxfix_cholfix/ -- and because the runner passes
+# --skip-if-exists, those 50 jobs would not overwrite, they would silently
+# no-op and exit 0, leaving nlive=200 results in place while looking like a
+# finished nlive=1000 sweep. Hence:
+#     met3 -> outtag boxfix_cholfix_nlive1000
+#     met4 -> outtag boxfix_cholfix
+#
+# met1 IS NOT RERUN. It builds no IS proposal (so the Cholesky bug never
+# touched it) and applies no PE-bounds box, and its nlive=1000 sweep in
+# inference/ is already the reference these are compared against.
+#
+# COST (measured, [[inference-cost-model]], mock cat6 at nlive=1000):
+#   met3 median 3.16 h (max 64 h);  met4 median 26.34 h (max 61.7 h).
+#   ~160 core-h for the 50 met3 + ~1300 core-h for the 50 met4 = ~1500 core-h.
+#   Method 4 at nlive=1000 is 8.4x method 1 and dominates the budget. Expect a
+#   long right tail: 7/50 met3 runs in the original nlive=1000 cat6 sweep were
+#   killed at 11-16 h still at dlogz 0.22-1.5.
+#
+# CHECKING PROGRESS: condor_q on this cluster has reported 0 jobs while jobs
+# were demonstrably still running. Verify by log mtime instead:
+#     find logs -name 'cholfix1000_*.err' -mmin -15
+# and note Condor's .log timestamps are LOCAL (PDT) while the shell is UTC.
+#
+# SUBMIT (not run automatically):
+#     cd /home/manchun.yeung/population/simon/popnflow/production
+#     condor_submit run_sim_cat_boxfix_cholfix_nlive1000.sub
+#
+# PLOT AFTERWARDS -- --data-dir is the SUITE dir and each method's pattern
+# carries its own subdirectory, because the three methods live in three
+# different inference dirs:
+#     python pp_bias_diagnostics.py extract --data-dir sim_cat6_sharp_w8 \
+#       --n-catalogs 50 --methods met1 met3 met4 --method-patterns \
+#       "met1=inference/simcat_cat{i:03d}_{method}.h5" \
+#       "met3=inference_boxfix_cholfix_nlive1000/simcatnm_cat{i:03d}_{method}.h5" \
+#       "met4=inference_met4_nlive1000_boxfix_cholfix/simcat_cat{i:03d}_{method}.h5" \
+#       --out sim_cat6_sharp_w8/pit_bias_cat6_cholfix_nlive1000.csv
+#     python pp_bias_diagnostics.py plot \
+#       --csv sim_cat6_sharp_w8/pit_bias_cat6_cholfix_nlive1000.csv \
+#       --outdir sim_cat6_sharp_w8/figures_cholfix_nlive1000 \
+#       --methods met1 met3 met4 --mathtext --per-param-pp \
+#       --membership sim_cat6_sharp_w8/mdc_membership.npy
+# ============================================================================
+universe   = vanilla
+executable = /home/manchun.yeung/population/simon/popnflow/production/run_sim_cat_catalog.sh
+arguments  = "$(catalog_id) $(method)"
+
+# NLIVE / PEB_LO / PEB_HI / OUTTAG via environment: catalog_file is an optional
+# MIDDLE positional in the runner, so trailing positionals risk misparsing.
+# 0.02 99.98 = the PE sample EDGE, identical to every boxfix sweep, so nlive
+# and the proposal fix are the only things that differ from the originals.
+environment = "HOME=$ENV(HOME) NLIVE=1000 PEB_LO=0.02 PEB_HI=99.98 OUTTAG=$(outtag)"
+
+accounting_group = ligo.prod.o3.cbc.bayesianpopulations.parametric
+initialdir = /home/manchun.yeung/population/simon/popnflow/production
+
+request_cpus   = 1
+request_memory = $(mem)
+request_disk   = 5000M
+
+# MEMORY IS SET BY THE PROPOSAL ARRAYS, NOT BY nlive. Measured at nlive=200:
+# met3 4.3 GB, met4 6.1 GB resident. nlive multiplies only the live-point set
+# and the stored chain (8 doubles per sample -- megabytes), so 7000M/8000M is
+# the same headroom the nlive=200 sweeps had, not a 5x scale-up.
+
+job_machine_attrs = Machine
+job_machine_attrs_history_length = 4
+requirements = (TARGET.Machine =!= MachineAttrMachine0) && \
+               (TARGET.Machine =!= MachineAttrMachine1) && \
+               (TARGET.Machine =!= MachineAttrMachine2) && \
+               (TARGET.Machine =!= MachineAttrMachine3) && \
+               (TARGET.has_avx =?= true)
+
+# has_avx: jaxlib is built requiring AVX and aborts on import without it.
+# 622/14915 pool slots do not publish it.
+
+periodic_release = (HoldReasonCode =?= 7) && (NumJobStarts < 5) && \
+                   (CurrentTime - EnteredCurrentStatus > 120)
+
+notification = never
+
+# $(ClusterId) IN THE LOG NAMES. Two earlier sim_cat6 clusters both wrote to
+# logs/boxfix_simcat_<cat>_<method>.{log,err,out}, so their content interleaved
+# and stale exit-127 records from a dead cluster looked like current failures
+# of the live one. The cholfix1000_ prefix also keeps these clear of the
+# nlive=200 cholfix sweep's cholfix_* logs.
+log    = logs/cholfix1000_$(ClusterId)_$(catalog_id)_$(method).log
+error  = logs/cholfix1000_$(ClusterId)_$(catalog_id)_$(method).err
+output = logs/cholfix1000_$(ClusterId)_$(catalog_id)_$(method).out
+
+queue catalog_id,method,mem,outtag from boxfix_cholfix_simcat_nlive1000_jobs.txt

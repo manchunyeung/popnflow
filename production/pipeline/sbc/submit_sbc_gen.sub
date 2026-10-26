@@ -1,0 +1,72 @@
+# ============================================================================
+# SBC block generation: pool -> catalogs -> per-event GMMs, one job per block.
+# Driven by sbc.dag (make_sbc_dag.py); VARS supply suite/block/ncat/nev/njobs.
+#
+# Cluster conventions below are inherited from the verified production/*.sub
+# files -- do not "simplify" them without reading their headers first:
+#   * executable is a WRAPPER SCRIPT, never a python binary. Under
+#     should_transfer_files, Condor copies a bare interpreter into the sandbox
+#     severed from site-packages and it dies at startup.
+#   * getenv = True is REJECTED on this cluster (SUBMIT_ALLOW_GETENV = false).
+#     HOME is imported explicitly for matplotlib/astropy cache dirs.
+#   * no +SingularityImage: it caused two separate whole-cluster failures.
+#
+# Paths are absolute and this job writes directly into the shared filesystem,
+# so no file transfer is configured -- unlike the bilby PE jobs, which had to
+# transfer results back out of the sandbox.
+# ============================================================================
+universe   = vanilla
+executable = /home/manchun.yeung/population/simon/popnflow/production/sbc_suite/run_sbc_block.sh
+arguments  = "gen $(suite) $(block) $(ncat) $(nev) $(njobs)"
+
+environment       = "HOME=$ENV(HOME)"
+accounting_group  = ligo.prod.o3.cbc.bayesianpopulations.parametric
+initialdir = /home/manchun.yeung/population/simon/popnflow/production/sbc_suite
+
+# request_cpus is a VAR tied to make_sbc_dag.py --gen-jobs, so the joblib
+# worker count and the slot request can never drift apart (they were separate
+# before: --gen-jobs set joblib, request_cpus was hardcoded 32).
+#
+# KEEP THIS SMALL. Measured against the live pool (20,234 slots advertised):
+#     32 cpus + 16 GB ->    90 matching slots
+#     16 cpus + 16 GB ->   447
+#      8 cpus + 16 GB -> 1,076
+#      1 cpu  +  7 GB -> 3,568   (what the inference jobs ask for)
+# A 32-core request competes for 0.4% of the pool and sits idle for hours.
+# Only the GMM stage uses the cores at all -- pool generation, the LONGER
+# stage, is single-threaded, so a big request holds cores idle either way.
+# 8 workers turns the 276-event BIC scan from ~12 min into ~48 min, which is
+# nothing next to the inference that follows.
+request_cpus   = $(njobs)
+request_memory = 16000M
+request_disk   = 20000M
+
+# Black-hole node avoidance, same recipe as bilby_pe_cat6/submit_pe.sub:
+# record the machines this job has run on and refuse to rematch them, so a node
+# that instantly fails jobs cannot vacuum up the whole suite.
+job_machine_attrs = Machine
+job_machine_attrs_history_length = 4
+requirements = (TARGET.Machine =!= MachineAttrMachine0) && \
+               (TARGET.Machine =!= MachineAttrMachine1) && \
+               (TARGET.Machine =!= MachineAttrMachine2) && \
+               (TARGET.Machine =!= MachineAttrMachine3)
+
+# TRANSIENT NFS HOLDS (HoldReasonCode 7). When many jobs start at once on
+# different nodes, the shared-filesystem open() of the .out/.err file can time
+# out, and Condor reports it as "No such file or directory" -- indistinguishable
+# from a genuinely missing path. Observed here: 6 jobs held at once with
+#   Failed to open '.../logs/inf_<node>.out' as standard output (errno 2)
+# while the directory demonstrably existed and was writable. Same failure mode
+# that killed ~180/276 jobs in bilby_pe_cat6 (see that submit file's header).
+#
+# Release them automatically after a short delay so the schedd re-runs them,
+# up to 5 attempts. Holds for any OTHER reason stay held for inspection rather
+# than being retried blindly.
+periodic_release = (HoldReasonCode =?= 7) && (NumJobStarts < 5) && \
+                   (CurrentTime - EnteredCurrentStatus > 120)
+
+notification = never
+log    = $(suite)/logs/gen_$(tag).log
+error  = $(suite)/logs/gen_$(tag).err
+output = $(suite)/logs/gen_$(tag).out
+queue

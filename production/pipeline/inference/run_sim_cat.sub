@@ -1,0 +1,106 @@
+# ============================================================================
+# HTCondor submit file: sim_cat6_sharp_w8 inference (sharp PL+Peak, q-boundary
+# fix, width_ref_snr=8 -- see RUN_NOTES sec.8 for why that decoupling matters).
+#
+# This is a SEPARATE pipeline from run_multicatalog.sub/run_one_catalog.sh,
+# which drive mdc_inference_multicatalog.py against Ray's real MDC events.
+# This one drives sim_cat_inference.py against our own generated catalogs
+# (sim_cat_04_build_catalogs.py / sim_cat_04b_select_catalogs.py already built
+# them -- there is no per-job catalog draw here).
+#
+# Submit with:
+#   condor_submit run_sim_cat.sub
+# Monitor with:
+#   condor_q -nobatch $USER
+# ============================================================================
+
+universe = vanilla
+executable = run_sim_cat_catalog.sh
+accounting_group = ligo.prod.o3.cbc.bayesianpopulations.parametric
+
++SingularityImage = "/home/manchun.yeung/apptainer/popnflow-env.sif"
+
+request_cpus   = 1
+request_memory = 15GB
+request_disk   = 5GB
+
+# ============================================================================
+# Per-job logs
+# ============================================================================
+log    = logs/simcat6_$(catalog_id)_$(method).log
+output = logs/simcat6_$(catalog_id)_$(method).out
+error  = logs/simcat6_$(catalog_id)_$(method).err
+
+# catalog_file left empty uses the default {indir}/mdc_cat{ID:03d}.h5.
+# HTCondor's new-syntax quoting (the whole value in double quotes) is needed
+# because catalog_file can be empty -- a bare $(catalog_file) with nothing to
+# substitute breaks the older unquoted form.
+arguments = "$(catalog_id) $(method) $(catalog_file)"
+
+# ============================================================================
+# Coverage sweep, METHOD 1: the 50 UNSELECTED catalogs (mdc_cat000..049.h5).
+# This is the headline number this whole investigation has been building to --
+# the sigma-recovery FRACTION over ordinary draws, not a cherry-picked one.
+#
+# NLIVE=1000 as of 2026-08-05 (run_sim_cat_catalog.sh) -- raised from 200 at
+# Simon's request. Real cluster data at nlive=200 (cluster 4929634, 33
+# finished Method-1 jobs before that cluster was removed for an unrelated
+# reason): 35-69min/job, well under the 15GB requested. nlive=1000 runtime is
+# UNMEASURED -- a naive linear scaling from the nlive=25 smoke test badly
+# OVERestimated the real nlive=200 time (predicted ~50min, several jobs
+# finished in half that), so do not trust a naive 5x extrapolation either.
+# Canary a couple of catalogs before trusting the full 50-job sweep's timing.
+# Per-event GMMs are LOADED from event_gmms.h5 (see run_sim_cat_catalog.sh),
+# not fit inline -- Method 1 never uses them, but the fit/load happens
+# unconditionally before the --method branch, so loading avoids paying for a
+# wasted inline fit. Smoke-tested 2026-08-05 (logs/smoke_m1_gmm.log) at
+# nlive=25; the nlive=1000 combination has not been separately smoke-tested.
+# ============================================================================
+method          = method1
+catalog_file    =
+queue catalog_id in 0 1 2 3 4 5 6 7 8 9 \
+                    10 11 12 13 14 15 16 17 18 19 \
+                    20 21 22 23 24 25 26 27 28 29 \
+                    30 31 32 33 34 35 36 37 38 39 \
+                    40 41 42 43 44 45 46 47 48 49
+
+# ============================================================================
+# Coverage sweep, METHOD 3 (same 50 catalogs). Uses the BIC-selected per-event
+# GMMs from event_gmms.h5 (K_argmin: min=3 median=5 max=13 across the 276-
+# event pool), not a fixed K=7 fit inline -- see sim_cat_fit_event_gmms.py
+# and run_sim_cat_catalog.sh's header comment.
+#
+# NLIVE=1000 as of 2026-08-05 -- raised from 200 at Simon's request. Real
+# cluster data at nlive=200 (cluster 4929634, 9 finished Method-3 jobs before
+# that cluster was removed): 28-71min/job, RSS well under the 15GB requested
+# (local smoke test measured a ~4.4GB plateau at nlive=25, set by
+# --nsamp-pop, not nlive). nlive=1000 runtime is UNMEASURED -- the earlier
+# extrapolation from a converged nlive=25 smoke test (17.8min, 381 iterations)
+# predicted ~2.4hr for nlive=200 and was WRONG BY 2-5x (real: 28-71min), so
+# do not trust a naive linear scaling from 200 to 1000 either. Canary a
+# couple of catalogs before trusting the full 50-job sweep's timing, and
+# check your site's default job walltime limit regardless.
+# ============================================================================
+method          = method3
+catalog_file    =
+queue catalog_id in 0 1 2 3 4 5 6 7 8 9 \
+                    10 11 12 13 14 15 16 17 18 19 \
+                    20 21 22 23 24 25 26 27 28 29 \
+                    30 31 32 33 34 35 36 37 38 39 \
+                    40 41 42 43 44 45 46 47 48 49
+
+# ============================================================================
+# The peak-SELECTED realizations (2026-08-05): richest-peak membership draws
+# found by scanning 5000 candidates (sim_cat_04b_select_catalogs.py), matching
+# or exceeding Ray's cat000 (n[28,42]=42, the one realization sigma has ever
+# been seen to recover on). These are DELIBERATELY EXCLUDED from the sweeps
+# above -- selecting on true m1 answers "can sigma recover on a favourable
+# draw", not "does it recover typically", and mixing the two would bias the
+# coverage fraction. Uncomment to also run them (Method 1 only, 2 extra jobs):
+# ----------------------------------------------------------------------------
+# request_memory = 4GB
+# method          = method1
+# queue catalog_id, catalog_file from (
+#     2476, sim_cat6_sharp_w8/mdc_cat2476_peak45.h5
+#     1962, sim_cat6_sharp_w8/mdc_cat1962_peak44.h5
+# )

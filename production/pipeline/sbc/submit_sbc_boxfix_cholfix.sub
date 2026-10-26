@@ -1,0 +1,91 @@
+# ============================================================================
+# SBC BOXFIX + CHOLESKY-FIX RERUN, nlive=200 -- regenerates the PP plot.
+#
+# WHY THIS SUPERSEDES submit_sbc_boxfix.sub. That sweep (cluster 70956309, 320
+# jobs, all exit 0) gave the current PP verdict: after the box fix beta STILL
+# failed, sup|F-u| met3 0.335 / met4 0.289. It is now known that met3 and met4
+# were both running on a proposal drawn from the WRONG covariance --
+# sample_from_q used y = L^-1 z with L = cholesky(Precision), giving
+# Cov = (L^T L)^-1 rather than the intended Sigma = (L L^T)^-1, while log_q
+# evaluated the correct density. Samples and weights therefore came from
+# different distributions, so the estimator was inconsistent, not merely noisy.
+# Diagonal covariances are immune, so the distortion fell entirely on the
+# correlated (m1,m2) ridge -- exactly where beta is measured, which is why beta
+# alone failed while the other seven parameters passed.
+#
+# Fixed 2026-08-21 in sim_cat_inference.py:1117. Verified in the real code
+# path: met3's beta profile at Lambda_true moved 4.931 -> 5.750 (true 5.821).
+# Full account in PROPOSAL_BUG.md.
+#
+# EVERY EXISTING met3/met4 PP RESULT IS INVALID -- inference_boxfix/ and
+# inference_met4_nlive200_boxfix/ included, and the pit/ and bands/ artefacts
+# derived from them. met1 is UNAFFECTED (no proposal), which is why it passes
+# SBC on all 8 parameters and remains the reference arm; do not rerun it.
+#
+# OUTPUT DIRECTORIES (both new; nothing existing is touched):
+#   met3 -> <suite>/blocks/block_NNN/inference_boxfix_cholfix/
+#   met4 -> <suite>/blocks/block_NNN/inference_met4_nlive200_boxfix_cholfix/
+# One constant OUTTAG is safe at nlive=200 because both names already differ
+# from the existing ones. The nlive=1000 subs use a per-row outtag instead,
+# because there met3's directory carries no nlive and would collide.
+#
+# met4's Lambda_0 comes from met1's *_lambda0.npy in each block's inference/,
+# which run_sbc_block.sh copies into met4's outdir. All 160 exist, so met3 and
+# met4 are independent and a flat queue is enough -- no DAG.
+#
+# COST: the nlive=200 predecessor took ~8 h typical with a tail to 19 h; 320
+# jobs. Budget on a high quantile, and exclude non-converged runs via
+# sbc_02 --min-ess rather than retrying forever.
+#
+# SUBMIT (not run automatically):
+#     cd /home/manchun.yeung/population/simon/popnflow/production/sbc_suite
+#     condor_submit submit_sbc_boxfix_cholfix.sub
+#
+# EXTRACT AFTERWARDS -- note BOTH --subdir and --out are required, or this
+# would overwrite the pre-fix PIT files:
+#     python sbc_02_extract_pit.py --suite sbc_n10 --method met3 \
+#         --n-blocks 20 --n-catalogs 8 --subdir inference_boxfix_cholfix \
+#         --out sbc_n10/pit/met3_cholfix.npz
+#     python sbc_02_extract_pit.py --suite sbc_n10 --method met4 \
+#         --n-blocks 20 --n-catalogs 8 \
+#         --subdir inference_met4_nlive200_boxfix_cholfix \
+#         --out sbc_n10/pit/met4_cholfix.npz
+#     python sbc_03_bands.py --suite sbc_n10 --methods met1 met3_cholfix met4_cholfix
+#     python sbc_04_combine_pp.py --suite sbc_n10 \
+#         --methods met1 met3_cholfix met4_cholfix --out pp_combined_cholfix
+# (sbc_04 falls back to the raw name for unknown methods; add met3_cholfix /
+#  met4_cholfix to its METHOD_LABELS/METHOD_COLORS for a labelled figure.)
+# ============================================================================
+universe   = vanilla
+executable = /home/manchun.yeung/population/simon/popnflow/production/sbc_suite/run_sbc_block.sh
+
+# args 6,7 = --pe-bounds-pct LO HI (the PE sample edge, same as before, so the
+# Cholesky fix is the ONLY difference); arg 8 = output dir tag.
+arguments  = "infer $(suite) $(block) $(cat) $(method) $(nlive) 0.02 99.98 boxfix_cholfix"
+
+environment      = "HOME=$ENV(HOME)"
+accounting_group = ligo.prod.o3.cbc.bayesianpopulations.parametric
+initialdir = /home/manchun.yeung/population/simon/popnflow/production/sbc_suite
+
+request_cpus   = 1
+request_memory = $(mem)
+request_disk   = 5000M
+
+job_machine_attrs = Machine
+job_machine_attrs_history_length = 4
+requirements = (TARGET.Machine =!= MachineAttrMachine0) && \
+               (TARGET.Machine =!= MachineAttrMachine1) && \
+               (TARGET.Machine =!= MachineAttrMachine2) && \
+               (TARGET.Machine =!= MachineAttrMachine3) && \
+               (TARGET.has_avx =?= true)
+
+periodic_release = (HoldReasonCode =?= 7) && (NumJobStarts < 5) && \
+                   (CurrentTime - EnteredCurrentStatus > 120)
+
+notification = never
+
+log    = $(suite)/logs/cholfix_$(ClusterId)_$(tag).log
+error  = $(suite)/logs/cholfix_$(ClusterId)_$(tag).err
+output = $(suite)/logs/cholfix_$(ClusterId)_$(tag).out
+
+queue suite,block,cat,method,nlive,mem,tag from boxfix_cholfix_jobs.txt

@@ -1,0 +1,75 @@
+# ============================================================================
+# HTCondor submit file: sim_cat6_sharp_w8 METHOD 4 (Mixture), QUICK sweep at
+# nlive=200.
+#
+# Method 4 is built ON TOP of Method 1: its mixture proposal
+#   q_mix = f*q_GMM + (1-f)*p_pop(Lambda0)
+# is anchored at Lambda0 = Method 1's posterior median for the SAME catalog.
+# run_sim_cat_catalog.sh reads that median from the finished met1 sweep
+# (sim_cat6_sharp_w8/inference/simcat_cat{ID:03d}_met1_lambda0.npy -- all 50
+# present as of 2026-08-06) and passes it as --mixture-lambda0. Nothing here
+# re-runs Method 1.
+#
+# This is the QUICK pass. Pair it with run_sim_cat_met4_nlive1000.sub for the
+# detailed one; the two write to SEPARATE output directories
+# (inference_met4_nlive200 / inference_met4_nlive1000) because the met4
+# filename carries no nlive tag and would otherwise collide.
+#
+# Submit with:
+#   condor_submit run_sim_cat_met4_nlive200.sub
+# Monitor with:
+#   condor_q -nobatch $USER
+#
+# BEFORE SUBMITTING ALL 50: Method 4 has not been smoke-tested on this catalog
+# set. Canary one catalog first --
+#   condor_submit run_sim_cat_met4_nlive200.sub -append 'catalog_ids = 0'
+# -- and check both the runtime and the per-event mixture ESS in the log
+# before committing the full sweep.
+# ============================================================================
+
+universe = vanilla
+executable = run_sim_cat_catalog.sh
+accounting_group = ligo.prod.o3.cbc.bayesianpopulations.parametric
+
++SingularityImage = "/home/manchun.yeung/apptainer/popnflow-env.sif"
+
+request_cpus   = 1
+# 15GB matches the met1/met3 sweep. Method 4 additionally holds the mixture
+# cache (Method-1 selection term + per-event GMM proposal samples), so it is
+# the more memory-hungry of the methods -- do not lower this without watching
+# a canary job's actual RSS.
+request_memory = 15GB
+request_disk   = 5GB
+
+# ============================================================================
+# Per-job logs. The met4_nlive200 tag keeps these from overwriting the
+# finished met1/met3 sweep's logs/simcat6_<id>_<method>.* files.
+# ============================================================================
+log    = logs/simcat6_met4_nlive200_$(catalog_id).log
+output = logs/simcat6_met4_nlive200_$(catalog_id).out
+error  = logs/simcat6_met4_nlive200_$(catalog_id).err
+
+# catalog_file is deliberately omitted -- the wrapper defaults to
+# {indir}/mdc_cat{ID:03d}.h5. nlive travels in the ENVIRONMENT rather than as a
+# 4th positional arg, because catalog_file is an optional MIDDLE argument and
+# an empty positional placeholder for it would be ambiguous (see the NLIVE
+# comment in run_sim_cat_catalog.sh).
+arguments   = "$(catalog_id) method4"
+environment = "NLIVE=200"
+
+# ============================================================================
+# The same 50 unselected catalogs the met1 sweep covered (mdc_cat000..049.h5).
+# The peak-SELECTED realizations are excluded here for the same reason they
+# are excluded from the met1/met3 sweeps in run_sim_cat.sub -- selecting on
+# true m1 would bias the coverage fraction.
+# ============================================================================
+# Kept as a macro so a canary run can override the whole list from the command
+# line without editing this file (-append lands after this assignment but
+# before the queue statement, so it wins):
+#   condor_submit run_sim_cat_met4_nlive200.sub -append 'catalog_ids = 0'
+catalog_ids = 0 1 2 3 4 5 6 7 8 9 \
+              10 11 12 13 14 15 16 17 18 19 \
+              20 21 22 23 24 25 26 27 28 29 \
+              30 31 32 33 34 35 36 37 38 39 \
+              40 41 42 43 44 45 46 47 48 49
+queue catalog_id in $(catalog_ids)
