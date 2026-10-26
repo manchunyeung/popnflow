@@ -76,7 +76,7 @@ Runtimes:
 | `mdc_neff_alpha_gamma`, `mdc_xi_scan`, `mdc_variance_Nsamp`, `pp_plot_per_parameter`, `pull_boxplot`, `gmm_fit_m1` | **pixel-identical** (0.000% differ) |
 | `mdc_corner_pos`, `mdc_Rm1`, `gwtc3_corner_pos`, `gwtc3_Rm1` | same posteriors, medians and bands; 1.5–16% of pixels differ (histogram binning, axis ranges, faint trace lines) |
 | `mdc_Rz`, `gwtc3_Rz` | as above, and the Ensemble band is now correct (see bugs) |
-| `corner_sanity` | new toy realisation (the original was unseeded), with the three toy bugs fixed |
+| `corner_sanity` | new toy realisation (the original was unseeded), with the three toy bugs fixed. All three methods now agree on logZ (−115.55 PE, −115.17 POP, −115.66 Ensemble), where the published run had POP 97 nats off, and they overlap on the truth. |
 
 The posterior figures can never match pixel-for-pixel. The production
 script resampled each dynesty run with `resample_equal()` and **no seed**
