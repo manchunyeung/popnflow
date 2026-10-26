@@ -72,10 +72,12 @@ fig_neff_xi() {  # N_eff + xi scans: one invocation so both share one GMM fit
 }
 
 fig_variance() { # variance vs N_samp + fit-variance floor: post-processing of two NPZ caches
+    # --sigma-band none: the paper shows only the grey 16-84% band, no hatched
+    # jackknife band (the script's default) -- verified pixel-identical.
     run variance "${PY}" "${S}/plot_variance_budget_left_numeric.py" --run mdc \
         --fitvar-cache   ${DIAG}/fitvar_cache_cat000.npz \
         --variance-cache ${DIAG}/variance_cache_3method_cat000_2e4.npz \
-        --outdir "${OUT}/variance"
+        --sigma-band none --outdir "${OUT}/variance"
     cp "${OUT}/variance/mdc_variance_budget_left_numeric.pdf" "${FIG}/mdc_variance_Nsamp.pdf"
 }
 

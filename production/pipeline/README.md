@@ -56,6 +56,25 @@ The data stay where they are. The worktree/branch carries code only; the
 driver `cd`s to the data root (the parent of `pipeline/` if it holds
 `sim_cat6_sharp_w8/`, else `$POPNFLOW_PROD`).
 
+### Verified 2026-10-26: a full `--sanity --compare` run
+
+| Figure | Result vs the paper PDF |
+|---|---|
+| `mdc_neff_alpha_gamma`, `mdc_xi_scan`, `mdc_variance_Nsamp`, `pp_plot_per_parameter`, `pull_boxplot`, `gmm_fit_m1` | **pixel-identical** (0.000%) |
+| `mdc_corner_pos`, `mdc_Rm1`, `mdc_Rz`, `gwtc3_corner_pos`, `gwtc3_Rm1`, `gwtc3_Rz` | same posteriors; 2–17% of pixels differ (histogram bins, axis ranges, faint curves) |
+| `corner_sanity` | re-runs the toy inference, so it is a new stochastic realisation |
+
+Why the corner and rate figures can't be exact: `make_plots_met4.py` calls
+`resample_equal()` with no `rstate` (lines 553, 609, 645), so each render
+draws a fresh equal-weight posterior sample. The rate curves use
+`np.random.seed(42)`, but they index into that unseeded sample. To make
+these figures reproducible, pass a seeded `rstate` to `resample_equal`.
+The script here is left verbatim.
+
+`mdc_variance_Nsamp` needs `--sigma-band none` (the driver passes it). The
+script's default, `jackknife`, adds a hatched ±1σ band that the paper does
+not show.
+
 ## Layout and the full chain
 
 ```
